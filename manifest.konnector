@@ -9,6 +9,11 @@
   "editor": "Benibur",
   "vendor_link": "https://kidizz.com/",
   "categories": ["School"],
+  "folders": [
+    {
+      "defaultDir": "$photos"
+    }
+  ],
   "fields": {
     "login": {
       "type": "text"
