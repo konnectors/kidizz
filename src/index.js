@@ -11,7 +11,9 @@ var {
   BaseKonnector,
   requestFactory,
   log,
-  cozyClient
+  updateOrCreate,
+  cozyClient,
+  errors
 } = require('cozy-konnector-libs')
 
 const CTXT = {} // persists the context throug the run
@@ -47,8 +49,10 @@ module.exports = new BaseKonnector(start)
 // the account information come from ./konnector-dev-config.json file
 async function start(fields) {
   CTXT.fields = fields
-  const accData = this.getAccountData()
-  console.log(accData)
+  // const accData = this.getAccountData() // TODO : retourne vide en mode dev...
+  const accData = {} // TODO : retourne vide en mode dev...remove
+
+  console.log(accData) // TODO : no comprendo le "secret" : kesako ??
   if (!accData.history) {
     CTXT.history = []
   } else {
@@ -68,9 +72,9 @@ async function start(fields) {
   log('info', 'Photos successfully retrieved')
 
   log('info', 'Save Account DATA...')
-  console.log('account data saved are :')
-  console.log(CTXT.history)
-  await this.saveAccountData({ history: CTXT.history }, { merge: false }) // quid de secret ?
+  log('debug', 'account data saved are :')
+  log('debug', CTXT.history)
+  await this.saveAccountData({ history: CTXT.history }, { merge: false }) // TODO : quid de secret ?
   log('info', 'Account DATA saved')
 }
 
@@ -105,6 +109,7 @@ function authenticate(login, password) {
     })
     .catch(err => {
       log('error', err.message)
+      throw new Error(errors.LOGIN_FAILED)
     })
 }
 
@@ -160,7 +165,7 @@ function retrievePhotos() {
 
 async function __retrievePhotos(child) {
   let photosList = []
-  // child.news = child.news.slice(0,1) // TODO remove, just for tests
+  // child.news = child.news.slice(0,10) // TODO remove, just for tests
   for (let news of child.news) {
     // check the post has some photo
     if (!(news.post && news.post.images)) continue
@@ -181,7 +186,7 @@ async function __retrievePhotos(child) {
   /*--------------------------------------------------*/
   /* FOR DEBUG, limit the number of photo to download */
   /* TODO comment / uncomment the relevant line       */
-  photosList = photosList.slice(0, 1)
+  // photosList = photosList.slice(0, 1)
   // photosList = [ photosList[0], {
   //     "url": "https://d131x7vzzf85jg.cloudfront.net/upload/images/image/dc/d5/14/00/IMG_0518_fea2.JPG?Expires=1555948544&Signature=AsOqDi2klpWUGEBPRW21X5WqIZ0Ise1uTHr3veRWPtNpk~DBuCNJvVBqvGbK9JD0bRBHOnEZeLL1TCmp0EMdVAuOHK-bw0M0TCOQQg7Xwc6UyH3UUA4wjnYJmyWvTABBi1JFUZfwUxHZx0ocKVwpdaco7TLAVmQopxruxuz1yXbXav3mas7xQTSp8mt-zJO15-Csnx7Y-HERbgQr167AVHj4rzrFo4j3aShlthfynHHvmjLgaEjiykOjhhqF~wMnSGI97F2l7xql0eLfQ6M4tLb0pqfls-dpEEENF6006~geiVtcbZZWhIkv0X9Kl9RPgTmIHUaNA4SXWMSsgq7i~w__&Key-Pair-Id=E210DR96H5WSKY",
   //     "newsDate": moment("2019-04-19T14:10:04.000Z")
@@ -189,7 +194,48 @@ async function __retrievePhotos(child) {
   // require('fs').writeFileSync('log.json', JSON.stringify(photosList))
   /*--------------------------------------------------*/
 
-  return Promise.map(photosList, photo => getPhoto(photo), { concurrency: 10 })
+  return Promise.map(photosList, photo => getPhoto(photo), {
+    concurrency: 10
+  }).then(mapresult => {
+    log('debug', '\ntototot')
+    log('debug', mapresult)
+
+    //   // TODO (pour l'instant copier coller depuis le connecteur facebook)
+    //   // pb : mapresult ne retourne pas la liste des photo mais une liste de undefined ??
+    //   // create the album if needed or fetch the correponding existing album
+    //   const [albumDoc] = await updateOrCreate(
+    //     [{ name: albumName, created_at: created_time }],
+    //     'io.cozy.photos.albums',
+    //     ['name']
+    //   )
+    //
+    //   log('info', `${picturesIds.length} files proposed to add to ${albumName}`)
+    //   const referencedFileIds = await listAllReferencedFiles(albumDoc)
+    //
+    //   log('info', `${referencedFileIds.length} files referenced in ${albumName}`)
+    //   const newFileIds = picturesIds.filter(id => !referencedFileIds.includes(id))
+    //   log('info', `${newFileIds.length} files added to ${albumName}`)
+    //   await cozyClient.data.addReferencedFiles(albumDoc, newFileIds)
+  })
+}
+
+async function listAllReferencedFiles(doc) {
+  let list = []
+  let result = {
+    links: {
+      next: `/data/${encodeURIComponent(doc._type)}/${
+        doc._id
+      }/relationships/references`
+    }
+  }
+  while (result.links.next) {
+    result = await cozyClient.fetchJSON('GET', result.links.next, null, {
+      processJSONAPI: false
+    })
+    list = list.concat(result.data)
+  }
+
+  return list.map(doc => doc.id)
 }
 
 async function isPhotoAlreadyInCozy(kidizzPhotoId) {
@@ -198,21 +244,20 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
     return img.kidizzId === kidizzPhotoId
   })
   if (!existingImg) {
-    console.log("photo doesn't exists in history", kidizzPhotoId)
+    log('debug', "photo doesn't exists in history", kidizzPhotoId)
     return false
   }
-  console.log('photo exists in history', kidizzPhotoId)
+  log('debug', 'photo exists in history ' + kidizzPhotoId)
 
   const existingImgDoc = await cozyClient.files.statById(existingImg.cozyId) // TODO to be tested in dev mode (when getAccoundData will work)
-
-  console.log('existingImgDoc', existingImgDoc)
+  // log('debug', 'existingImgDoc ' + existingImgDoc)
 
   if (!existingImgDoc) {
-    console.log('photo exists in history but NOT in Cozy')
+    log('debug', 'photo exists in history but NOT in Cozy') // TODO : to be tested
     return false
   }
 
-  console.log('test photo exists in history AND in Cozy', true)
+  log('debug', 'test photo exists in history AND in Cozy')
 
   return true
 }
@@ -245,15 +290,14 @@ function getPhoto(photo) {
       const filename =
         photo.newsDate.format('YYYY-MM-DD') + hour + photo.filename
 
-      // require('fs').writeFileSync('data/' + filename, photo.body)
-
       // Get dir ID
-      const dirDoc = await cozyClient.files.statByPath(CTXT.fields.folderPath) // TODO : est on sûr que dirDoc existe ?
+      // TODO : le path en dev mode est cozy-konnector-dev-root ... comment le mettre dans Drive/Photos/Crèche ?
+      const dirDoc = await cozyClient.files.statByPath(CTXT.fields.folderPath) // TODO : est on sûr que dirDoc existe ? fautil le créer s'il n'existe psa ?
 
       // Test filename existance
       // should not happen since we tested if the file is already in the Cozy
       const isFileAlreadyInDir = await cozyClient.files
-        .statByPath(CTXT.fields.folderPath + filename)
+        .statByPath(CTXT.fields.folderPath + filename) // TODO to be tested in dev mode
         .catch(err => {
           return false
         })
@@ -261,7 +305,7 @@ function getPhoto(photo) {
         throw new Error('File with same path already in Cozy')
 
       // Save photo
-      console.log('save photo')
+      log('debug', 'save photo') // TODO si on réimporte en dev mode, il n'y a pas l'history, mais ne détecte pas que le fichier existe déjà ??
       return cozyClient.files.create(bufferToStream(photo.body), {
         name: filename,
         dirID: dirDoc._id,
@@ -270,11 +314,13 @@ function getPhoto(photo) {
       })
     })
     .then(fileDoc => {
-      CTXT.history.push({
+      const historyItem = {
         cozyId: fileDoc._id,
         kidizzId: photo.kidizzId,
         retrievalDate: new Date().toISOString()
-      })
+      }
+      CTXT.history.push(historyItem)
+      return historyItem
     })
     .catch(err => {
       if (err.message === 'File with same path already in Cozy') {

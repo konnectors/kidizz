@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "name": "Kidizz Connector",
+  "name": "Kidizz",
   "type": "konnector",
   "language": "node",
   "icon": "icon.png",
