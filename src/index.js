@@ -11,7 +11,8 @@ var {
   BaseKonnector,
   requestFactory,
   log,
-  cozyClient
+  cozyClient,
+  errors
 } = require('cozy-konnector-libs')
 
 const CTXT = {} // persists the context throug the run
@@ -104,6 +105,7 @@ function authenticate(login, password) {
     })
     .catch(err => {
       log('error', err.message)
+      throw new Error(errors.LOGIN_FAILED)
     })
 }
 
