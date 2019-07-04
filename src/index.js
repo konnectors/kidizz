@@ -48,7 +48,6 @@ module.exports = new BaseKonnector(start)
 async function start(fields) {
   CTXT.fields = fields
   const accData = this.getAccountData()
-  console.log(accData)
   if (!accData.history) {
     CTXT.history = []
   } else {
@@ -68,8 +67,8 @@ async function start(fields) {
   log('info', 'Photos successfully retrieved')
 
   log('info', 'Save Account DATA...')
-  console.log('account data saved are :')
-  console.log(CTXT.history)
+  log('debug', 'account data saved are :')
+  log('debug', CTXT.history)
   await this.saveAccountData({ history: CTXT.history }, { merge: false }) // quid de secret ?
   log('info', 'Account DATA saved')
 }
@@ -198,21 +197,24 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
     return img.kidizzId === kidizzPhotoId
   })
   if (!existingImg) {
-    console.log("photo doesn't exists in history", kidizzPhotoId)
+    log('debug', "photo doesn't exists in history")
+    log('debug', kidizzPhotoId)
     return false
   }
-  console.log('photo exists in history', kidizzPhotoId)
+  log('debug', 'photo exists in history')
+  log('debug', kidizzPhotoId)
 
   const existingImgDoc = await cozyClient.files.statById(existingImg.cozyId) // TODO to be tested in dev mode (when getAccoundData will work)
 
-  console.log('existingImgDoc', existingImgDoc)
+  log('debug', 'existingImgDoc', existingImgDoc)
+  log('debug', existingImgDoc)
 
   if (!existingImgDoc) {
-    console.log('photo exists in history but NOT in Cozy')
+    log('debug', 'photo exists in history but NOT in Cozy')
     return false
   }
 
-  console.log('test photo exists in history AND in Cozy', true)
+  log('debug', 'test photo exists in history AND in Cozy')
 
   return true
 }
@@ -255,13 +257,15 @@ function getPhoto(photo) {
       const isFileAlreadyInDir = await cozyClient.files
         .statByPath(CTXT.fields.folderPath + filename)
         .catch(err => {
+          log('error', 'isFileAlreadyInDir')
+          log('error', err.message)
           return false
         })
       if (isFileAlreadyInDir)
         throw new Error('File with same path already in Cozy')
 
       // Save photo
-      console.log('save photo')
+      log('info', 'save photo')
       return cozyClient.files.create(bufferToStream(photo.body), {
         name: filename,
         dirID: dirDoc._id,
@@ -280,7 +284,7 @@ function getPhoto(photo) {
       if (err.message === 'File with same path already in Cozy') {
         log('info', 'File already in Cozy')
       } else {
-        log('error', err)
+        log('error', err.message)
       }
     })
 }
