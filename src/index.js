@@ -49,10 +49,9 @@ module.exports = new BaseKonnector(start)
 // the account information come from ./konnector-dev-config.json file
 async function start(fields) {
   CTXT.fields = fields
-  // const accData = this.getAccountData() // TODO : retourne vide en mode dev...
-  const accData = {} // TODO : retourne vide en mode dev...remove
+  // const accData = this.getAccountData() // retourne vide en mode dev...
+  const accData = {} // TODO : remove, just for dev mode...
 
-  console.log(accData) // TODO : no comprendo le "secret" : kesako ??
   if (!accData.history) {
     CTXT.history = []
   } else {
@@ -74,7 +73,7 @@ async function start(fields) {
   log('info', 'Save Account DATA...')
   log('debug', 'account data saved are :')
   log('debug', CTXT.history)
-  await this.saveAccountData({ history: CTXT.history }, { merge: false }) // TODO : quid de secret ?
+  await this.saveAccountData({ history: CTXT.history }, { merge: false })
   log('info', 'Account DATA saved')
 }
 
@@ -196,47 +195,52 @@ async function __retrievePhotos(child) {
 
   return Promise.map(photosList, photo => getPhoto(photo), {
     concurrency: 10
-  }).then(mapresult => {
+  }).then(async mapresult => {
     log('debug', '\ntototot')
     log('debug', mapresult)
+    let newFileIds
+    newFileIds = mapresult.filter(item => item)
+    newFileIds = newFileIds.map(item => item.cozyId)
+    log('debug', newFileIds)
 
-    //   // TODO (pour l'instant copier coller depuis le connecteur facebook)
-    //   // pb : mapresult ne retourne pas la liste des photo mais une liste de undefined ??
-    //   // create the album if needed or fetch the correponding existing album
-    //   const [albumDoc] = await updateOrCreate(
-    //     [{ name: albumName, created_at: created_time }],
-    //     'io.cozy.photos.albums',
-    //     ['name']
-    //   )
-    //
-    //   log('info', `${picturesIds.length} files proposed to add to ${albumName}`)
-    //   const referencedFileIds = await listAllReferencedFiles(albumDoc)
-    //
-    //   log('info', `${referencedFileIds.length} files referenced in ${albumName}`)
-    //   const newFileIds = picturesIds.filter(id => !referencedFileIds.includes(id))
-    //   log('info', `${newFileIds.length} files added to ${albumName}`)
-    //   await cozyClient.data.addReferencedFiles(albumDoc, newFileIds)
+    // TODO (pour l'instant copier coller depuis le connecteur facebook)
+    // pb : mapresult ne retourne pas la liste des photo mais une liste de undefined ??
+    // create the album if needed or fetch the correponding existing album
+    const albumName = 'Album Kidizz'
+    const [albumDoc] = await updateOrCreate(
+      [{ name: albumName }],
+      'io.cozy.photos.albums',
+      ['name']
+    )
+
+    log('info', `${newFileIds.length} files proposed to add to ${albumName}`)
+    // const referencedFileIds = await listAllReferencedFiles(albumDoc)
+
+    // log('info', `${referencedFileIds.length} files referenced in ${albumName}`)
+    // const newFileIds = picturesIds.filter(id => !referencedFileIds.includes(id))
+    log('info', `${newFileIds.length} files added to ${albumName}`)
+    await cozyClient.data.addReferencedFiles(albumDoc, newFileIds)
   })
 }
 
-async function listAllReferencedFiles(doc) {
-  let list = []
-  let result = {
-    links: {
-      next: `/data/${encodeURIComponent(doc._type)}/${
-        doc._id
-      }/relationships/references`
-    }
-  }
-  while (result.links.next) {
-    result = await cozyClient.fetchJSON('GET', result.links.next, null, {
-      processJSONAPI: false
-    })
-    list = list.concat(result.data)
-  }
-
-  return list.map(doc => doc.id)
-}
+// async function listAllReferencedFiles(doc) {
+//   let list = []
+//   let result = {
+//     links: {
+//       next: `/data/${encodeURIComponent(doc._type)}/${
+//         doc._id
+//       }/relationships/references`
+//     }
+//   }
+//   while (result.links.next) {
+//     result = await cozyClient.fetchJSON('GET', result.links.next, null, {
+//       processJSONAPI: false
+//     })
+//     list = list.concat(result.data)
+//   }
+//
+//   return list.map(doc => doc.id)
+// }
 
 async function isPhotoAlreadyInCozy(kidizzPhotoId) {
   const { history } = CTXT // TODO full history cycle to be tested
@@ -292,20 +296,20 @@ function getPhoto(photo) {
 
       // Get dir ID
       // TODO : le path en dev mode est cozy-konnector-dev-root ... comment le mettre dans Drive/Photos/Crèche ?
-      const dirDoc = await cozyClient.files.statByPath(CTXT.fields.folderPath) // TODO : est on sûr que dirDoc existe ? fautil le créer s'il n'existe psa ?
+      const dirDoc = await cozyClient.files.statByPath(CTXT.fields.folderPath)
 
       // Test filename existance
       // should not happen since we tested if the file is already in the Cozy
       const isFileAlreadyInDir = await cozyClient.files
-        .statByPath(CTXT.fields.folderPath + filename) // TODO to be tested in dev mode
-        .catch(err => {
+        .statByPath(CTXT.fields.folderPath + '/' + filename) // TODO to be tested in dev mode
+        .catch( ( )=> {
           return false
         })
       if (isFileAlreadyInDir)
         throw new Error('File with same path already in Cozy')
 
       // Save photo
-      log('debug', 'save photo') // TODO si on réimporte en dev mode, il n'y a pas l'history, mais ne détecte pas que le fichier existe déjà ??
+      log('debug', 'save photo')
       return cozyClient.files.create(bufferToStream(photo.body), {
         name: filename,
         dirID: dirDoc._id,
@@ -337,8 +341,7 @@ returns momentjs object or undefined
 ***************************************************/
 function getExifDate(photo) {
   let ext = photo.ext
-  if (!(ext === 'jpg' || ext === 'jpeg' || ext === 'tiff'))
-    return Promise.resolve(undefined) // TODO return undefined or Promise.resolve(undefined)  ?
+  if (!(ext === 'jpg' || ext === 'jpeg' || ext === 'tiff')) return undefined
   return readExif(photo.body).then(exifData => {
     if (exifData) {
       if (

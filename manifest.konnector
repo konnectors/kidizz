@@ -34,6 +34,7 @@
     "files": {
       "type": "io.cozy.files"
     },
+    "albums": {"type": "io.cozy.photos.albums"},
     "accounts": {
       "type": "io.cozy.accounts",
       "verbs": ["GET"]
