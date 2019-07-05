@@ -1,10 +1,9 @@
 {
   "name": "cozy-konnector-kidizz",
   "version": "1.0.0",
-  "description": "",
-  "repository": {
+  "description": "", "repository": {
     "type": "git",
-    "url": "git+https://github.com/benibur/cozy-konnector-kidizz.git"
+    "url": "git+https://github.com/doubleface/cozy-konnector-kidizz.git"
   },
   "keywords": [],
   "author": "Cozy Cloud",
