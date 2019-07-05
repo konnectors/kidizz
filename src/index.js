@@ -49,8 +49,8 @@ module.exports = new BaseKonnector(start)
 // the account information come from ./konnector-dev-config.json file
 async function start(fields) {
   CTXT.fields = fields
-  // const accData = this.getAccountData() // retourne vide en mode dev...
-  const accData = {} // TODO : remove, just for dev mode...
+  const accData = this.getAccountData() // retourne vide en mode dev...
+  // const accData = {} // TODO : remove, just for dev mode...
 
   if (!accData.history) {
     CTXT.history = []
@@ -208,7 +208,7 @@ async function __retrievePhotos(child) {
     // create the album if needed or fetch the correponding existing album
     const albumName = 'Album Kidizz'
     const [albumDoc] = await updateOrCreate(
-      [{ name: albumName }],
+      [{ name: albumName, created_at: new Date() }],
       'io.cozy.photos.albums',
       ['name']
     )
@@ -302,7 +302,7 @@ function getPhoto(photo) {
       // should not happen since we tested if the file is already in the Cozy
       const isFileAlreadyInDir = await cozyClient.files
         .statByPath(CTXT.fields.folderPath + '/' + filename) // TODO to be tested in dev mode
-        .catch( ( )=> {
+        .catch(() => {
           return false
         })
       if (isFileAlreadyInDir)

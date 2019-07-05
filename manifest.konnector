@@ -5,7 +5,7 @@
   "language": "node",
   "icon": "icon.png",
   "slug": "kidizz",
-  "source": "git@github.com:Benibur/cozy-konnector-kidizz",
+  "source": "git@github.com:benibur/cozy-konnector-kidizz",
   "editor": "Benibur",
   "vendor_link": "https://kidizz.com/",
   "categories": ["School"],
@@ -36,8 +36,7 @@
     },
     "albums": {"type": "io.cozy.photos.albums"},
     "accounts": {
-      "type": "io.cozy.accounts",
-      "verbs": ["GET"]
+      "type": "io.cozy.accounts"
     }
   },
   "developer": {
