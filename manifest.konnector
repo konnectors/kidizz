@@ -5,7 +5,7 @@
   "language": "node",
   "icon": "icon.png",
   "slug": "kidizz",
-  "source": "git@github.com:doubleface/cozy-konnector-kidizz",
+  "source": "git@github.com:benibur/cozy-konnector-kidizz",
   "editor": "Benibur",
   "vendor_link": "https://kidizz.com/",
   "categories": ["School"],
