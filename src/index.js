@@ -1,5 +1,6 @@
 /* SET DEBUG ENVIRONEMNT VARIABLE TO FALSE TO AVOID LOGS FROM THE EXIF LIB */
 process.env['DEBUG'] = true
+const now = require('performance-now')
 
 /* GLOBALS */
 const Promise = require('bluebird')
@@ -7,6 +8,7 @@ const path = require('path')
 const Readable = require('stream').Readable
 const moment = require('moment')
 const ExifImage = require('exif').ExifImage
+
 var {
   BaseKonnector,
   requestFactory,
@@ -19,27 +21,34 @@ var {
 const CTXT = {} // persists the context throug the run
 /*
 CTXT = {
-  fields   : fields ,
-  history  : []     ,                // see below
-  kidizzId      : photo.kidizzId ,
-  retrievalDate : [Date()] }
-  children : [
+  fields   : fields ,         //
+  NODE_ENV : string,          // undefined in prod, 'development' in dev mode, 'standalone' in standalone
+  history  : {}     ,         // retrieved from account data, see below
+  children : [                // the list of children retrieved from the API
     {
       id               ,
       news:[]          ,
       firstname        ,
       lastname         ,
+      section_name     ,
+      currentAlbumDoc  , // = the album    doc where to add the photos this this child
+      currentDirId     , // = the directory id where to add the photos this this child
       birthday         ,
       avatar_url       ,
-      ... from the api ,
+      ... rest from the api ,
     }
   ]
 }
-CTXT.history[n] = {
-  cozyId        : fileDoc._id    , // INT
-  kidizzId      : photo.kidizzId , // INT
-  retrievalDate : new Date()     , // ISO8601 formated STRING
+CTXT.history = {
+  photos: [{
+    cozyId        : fileDoc._id    , // INT
+    kidizzId      : photo.kidizzId , // INT
+    retrievalDate : new Date()     , // ISO8601 formated STRING
+  }],
+  albumsId:      {'childId-section_name': photoAlbumId},
+  directoriesId: {'childId-section_name': photoDirectoryId},
 }
+
  */
 
 module.exports = new BaseKonnector(start)
@@ -49,14 +58,18 @@ module.exports = new BaseKonnector(start)
 // the account information come from ./konnector-dev-config.json file
 async function start(fields) {
   CTXT.fields = fields
-  // const accData = this.getAccountData() // retourne vide en mode dev...
-  const accData = {} // TODO : remove, just for dev mode...
+  CTXT.NODE_ENV = process.env.NODE_ENV
 
-  if (!accData.history) {
-    CTXT.history = []
+  let accData
+  if (CTXT.NODE_ENV == 'development') {
+    accData = {}
   } else {
-    CTXT.history = accData.history
+    accData = this.getAccountData() // doesn't work in dev mode
   }
+  if (!accData.photos) accData.photos = []
+  if (!accData.albumsId) accData.albumsId = {}
+  if (!accData.directoriesId) accData.directoriesId = {}
+  CTXT.history = accData
 
   log('info', 'Authenticating ...')
   await authenticate(fields.login, fields.password)
@@ -73,7 +86,10 @@ async function start(fields) {
   log('info', 'Save Account DATA...')
   log('debug', 'account data saved are :')
   log('debug', CTXT.history)
-  await this.saveAccountData({ history: CTXT.history }, { merge: false })
+
+  if (CTXT.NODE_ENV != 'development') {
+    await this.saveAccountData({ history: CTXT.history }, { merge: false })
+  }
   log('info', 'Account DATA saved')
 }
 
@@ -101,10 +117,58 @@ function authenticate(login, password) {
         'User-Agent': 'Kidizz Android (com.kidizz.KidizzApp)/2.5.7'
       }
     })
-    .then(res => {
-      // retrieve children list
+    .then(async res => {
+      // retrieve children and init data
       CTXT.children = res.user.children
-      CTXT.children.forEach(child => (child.news = []))
+      CTXT.children.forEach(async child => {
+        // 1/ child.news init
+        child.news = []
+        // 2/ child.currentAlbumDoc init
+        let currentAlbumId =
+          CTXT.history.albumsId[`${child.id}-${child.section_name}`]
+        if (!currentAlbumId) {
+          // if there was no album in history
+          // create the album if needed or fetch the album with the default name
+          const defaultAlbumName = `${child.firstname} - crèche ${
+            child.section_name
+          }`
+          const [albumDoc] = await updateOrCreate(
+            [{ name: defaultAlbumName, created_at: new Date() }],
+            'io.cozy.photos.albums',
+            ['name']
+          )
+          child.currentAlbumDoc = albumDoc
+          CTXT.history.albumsId[`${child.id}-${child.section_name}`] =
+            albumDoc._id
+        } else {
+          // there was an album in history, retrieve the album doc from Cozy
+          const albumDoc = await cozyClient.data.find(
+            'io.cozy.photos.albums',
+            currentAlbumId
+          )
+          child.currentAlbumDoc = albumDoc
+        }
+        // 3/ child.currentDirId init
+        let currentDirId =
+          CTXT.history.directoriesId[`${child.id}-${child.section_name}`]
+        if (!currentDirId) {
+          // there was a directory in history, easy
+          child.currentDirId = currentDirId
+        } else {
+          // there was no directory in history
+          // create the directoryor fetch the one with the default path
+          const defaultAlbumPath = `${child.firstname} - crèche ${
+            child.section_name
+          }`
+          // const [albumDoc] = await updateOrCreate(
+          //   [{ name: defaultAlbumName, created_at: new Date() }],
+          //   'io.cozy.photos.albums',
+          //   ['name']
+          // )
+          // child.currentDirId = albumDoc._id
+          // CTXT.history.directoriesId[`${child.id}-${child.section_name}`] = albumDoc._id
+        }
+      })
     })
     .catch(err => {
       log('error', err.message)
@@ -144,6 +208,7 @@ function retrieveNews_rec(page, child) {
       if (news.length === 0) return true
       //concat all the news pages into CTXT.children[i].news
       child.news = child.news.concat(news)
+      // return true
       return retrieveNews_rec(page + 1, child)
     })
     .catch(err => {
@@ -163,14 +228,12 @@ function retrievePhotos() {
 }
 
 async function __retrievePhotos(child) {
+  // A] prepare the photosList : [{url, newsDate, child, kidizzId},...]
   let photosList = []
-  // child.news = child.news.slice(0,10) // TODO remove, just for tests
   for (let news of child.news) {
-    // check the post has some photo
-    if (!(news.post && news.post.images)) continue
+    if (!(news.post && news.post.images)) continue // check the post has some photo
     for (let img of news.post.images) {
-      // check the image has not already been downloded
-      if (await isPhotoAlreadyInCozy(img.id)) continue
+      if (await isPhotoAlreadyInCozy(img.id)) continue // check the image has not already been downloded
       let url = img.url
       url = path.dirname(url) + '/' + path.basename(url).replace(/^nc1000_/, '')
       let photo = {
@@ -182,71 +245,38 @@ async function __retrievePhotos(child) {
       photosList.push(photo)
     }
   }
-  /*--------------------------------------------------*/
-  /* FOR DEBUG, limit the number of photo to download */
-  /* TODO comment / uncomment the relevant line       */
-  // photosList = photosList.slice(0, 1)
-  // photosList = [ photosList[0], {
-  //     "url": "https://d131x7vzzf85jg.cloudfront.net/upload/images/image/dc/d5/14/00/IMG_0518_fea2.JPG?Expires=1555948544&Signature=AsOqDi2klpWUGEBPRW21X5WqIZ0Ise1uTHr3veRWPtNpk~DBuCNJvVBqvGbK9JD0bRBHOnEZeLL1TCmp0EMdVAuOHK-bw0M0TCOQQg7Xwc6UyH3UUA4wjnYJmyWvTABBi1JFUZfwUxHZx0ocKVwpdaco7TLAVmQopxruxuz1yXbXav3mas7xQTSp8mt-zJO15-Csnx7Y-HERbgQr167AVHj4rzrFo4j3aShlthfynHHvmjLgaEjiykOjhhqF~wMnSGI97F2l7xql0eLfQ6M4tLb0pqfls-dpEEENF6006~geiVtcbZZWhIkv0X9Kl9RPgTmIHUaNA4SXWMSsgq7i~w__&Key-Pair-Id=E210DR96H5WSKY",
-  //     "newsDate": moment("2019-04-19T14:10:04.000Z")
-  //   }]
-  // require('fs').writeFileSync('log.json', JSON.stringify(photosList))
-  /*--------------------------------------------------*/
-
-  return Promise.map(photosList, photo => getPhoto(photo), {
-    concurrency: 10
-  }).then(async mapresult => {
-    log('debug', '\ntototot')
-    log('debug', mapresult)
-    let newFileIds
-    newFileIds = mapresult.filter(item => item)
-    newFileIds = newFileIds.map(item => item.cozyId)
-    log('debug', newFileIds)
-
-    // TODO (pour l'instant copier coller depuis le connecteur facebook)
-    // pb : mapresult ne retourne pas la liste des photo mais une liste de undefined ??
-    // create the album if needed or fetch the correponding existing album
-    const albumName = 'Album Kidizz'
-    const [albumDoc] = await updateOrCreate(
-      [{ name: albumName }],
-      'io.cozy.photos.albums',
-      ['name']
-    )
-
-    log('info', `${newFileIds.length} files proposed to add to ${albumName}`)
-    // const referencedFileIds = await listAllReferencedFiles(albumDoc)
-
-    // log('info', `${referencedFileIds.length} files referenced in ${albumName}`)
-    // const newFileIds = picturesIds.filter(id => !referencedFileIds.includes(id))
-    log('info', `${newFileIds.length} files added to ${albumName}`)
-    await cozyClient.data.addReferencedFiles(albumDoc, newFileIds)
-  })
+  // B] download all photos
+  return (
+    Promise.map(photosList, photo => downloadPhoto(photo), { concurrency: 10 })
+      // C] Update photo album
+      .then(async mapresult => {
+        let newPhotoIds
+        newPhotoIds = mapresult.filter(item => item) // filters undefined items (photo with a file with same name)
+        newPhotoIds = newPhotoIds.map(item => item.cozyId)
+        // // create the album if needed or fetch the correponding existing album
+        // const albumName = `${child.firstname} - crèche ${child.section_name}`
+        // const [albumDoc] = await updateOrCreate(
+        //   [{ name: albumName, created_at: new Date() }],
+        //   'io.cozy.photos.albums',
+        //   ['name']
+        // )
+        await cozyClient.data.addReferencedFiles(
+          child.currentAlbumDoc,
+          newPhotoIds
+        )
+        log(
+          'info',
+          `${newPhotoIds.length} files added to ${child.currentAlbumDoc.name}`
+        )
+      })
+  )
 }
 
-// async function listAllReferencedFiles(doc) {
-//   let list = []
-//   let result = {
-//     links: {
-//       next: `/data/${encodeURIComponent(doc._type)}/${
-//         doc._id
-//       }/relationships/references`
-//     }
-//   }
-//   while (result.links.next) {
-//     result = await cozyClient.fetchJSON('GET', result.links.next, null, {
-//       processJSONAPI: false
-//     })
-//     list = list.concat(result.data)
-//   }
-//
-//   return list.map(doc => doc.id)
-// }
-
 async function isPhotoAlreadyInCozy(kidizzPhotoId) {
-  const { history } = CTXT // TODO full history cycle to be tested
-  const existingImg = history.find(img => {
-    return img.kidizzId === kidizzPhotoId
-  })
+  // TODO full history cycle to be tested
+  const existingImg = CTXT.history.photos.find(
+    img => img.kidizzId === kidizzPhotoId
+  )
   if (!existingImg) {
     log('debug', "photo doesn't exists in history", kidizzPhotoId)
     return false
@@ -257,7 +287,10 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
   // log('debug', 'existingImgDoc ' + existingImgDoc)
 
   if (!existingImgDoc) {
-    log('debug', 'photo exists in history but NOT in Cozy') // TODO : to be tested
+    log(
+      'debug',
+      'photo exists in history but NOT in Cozy - ' + existingImg.cozyId
+    ) // TODO : to be tested
     return false
   }
 
@@ -266,7 +299,7 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
   return true
 }
 
-function getPhoto(photo) {
+function downloadPhoto(photo) {
   return requestFactory({ json: true, cheerio: false, jar: true })
     .get({
       uri: photo.url,
@@ -288,8 +321,6 @@ function getPhoto(photo) {
         if (photo.newsDate.diff(exifDate) < 86400000) {
           hour = exifDate.format(' HH[h]mm - ')
         }
-      } else {
-        exifDate = moment('1000-01-01 - 00:00', 'YYYY-MM-DD - HH:mm')
       }
       const filename =
         photo.newsDate.format('YYYY-MM-DD') + hour + photo.filename
@@ -302,7 +333,7 @@ function getPhoto(photo) {
       // should not happen since we tested if the file is already in the Cozy
       const isFileAlreadyInDir = await cozyClient.files
         .statByPath(CTXT.fields.folderPath + '/' + filename) // TODO to be tested in dev mode
-        .catch( ( )=> {
+        .catch(() => {
           return false
         })
       if (isFileAlreadyInDir)
@@ -313,7 +344,7 @@ function getPhoto(photo) {
       return cozyClient.files.create(bufferToStream(photo.body), {
         name: filename,
         dirID: dirDoc._id,
-        contentType: photo.mimeType,
+        contentType: 'image/JPG', // photo.mimeType,
         lastModifiedDate: photo.newsDate.format()
       })
     })
@@ -323,12 +354,12 @@ function getPhoto(photo) {
         kidizzId: photo.kidizzId,
         retrievalDate: new Date().toISOString()
       }
-      CTXT.history.push(historyItem)
+      CTXT.history.photos.push(historyItem)
       return historyItem
     })
     .catch(err => {
       if (err.message === 'File with same path already in Cozy') {
-        log('info', 'File already in Cozy')
+        log('info', 'File with same path already in Cozy')
       } else {
         log('error', err)
       }
