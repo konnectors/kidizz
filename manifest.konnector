@@ -1,0 +1,69 @@
+{
+  "version": "1.0.0",
+  "name": "Kidizz",
+  "type": "konnector",
+  "language": "node",
+  "icon": "icon.png",
+  "slug": "kidizz",
+  "source": "git@github.com:konnector/kidizz",
+  "editor": "Benibur",
+  "vendor_link": "https://kidizz.com/",
+  "categories": ["School"],
+  "fields": {
+    "login": {
+      "type": "text"
+    },
+    "password": {
+      "type": "password"
+    },
+    "advancedFields": {
+      "folderPath": {
+        "advanced": true,
+        "isRequired": false
+      }
+    }
+  },
+  "data_types": [],
+  "screenshots": [],
+  "permissions": {
+    "files": {
+      "type": "io.cozy.files"
+    },
+    "albums": {"type": "io.cozy.photos.albums"},
+    "accounts": {
+        "type": "io.cozy.accounts"
+    }
+  },
+  "developer": {
+    "name": "Benibur",
+    "url": "https://github.com/Benibur/"
+  },
+  "langs": ["fr", "en"],
+  "locales": {
+    "fr": {
+      "short_description": "Récupère les photos de vos enfants partagés sur Kidizz.com",
+      "long_description": "Récupérez les photos et documents partagés par la crèche de vos enfants sur Kidizz.com",
+      "permissions": {
+        "files": {
+          "description": "Utilisé pour sauvegarder les photos et documents"
+        },
+        "accounts": {
+          "description": "Utilisé pour obtenir les données du compte"
+        }
+      }
+    },
+    "en": {
+      "short_description": "Retrieve the Photo of your children shared on Kidizz.com",
+      "long_description": "Retrieve the Photo of your children and documents shared on Kidizz.com",
+      "permissions": {
+        "files": {
+          "description": "Required to save the bills"
+        },
+        "accounts": {
+          "description": "Required to get the account's data"
+        }
+      }
+    }
+  },
+  "manifest_version": "2"
+}
