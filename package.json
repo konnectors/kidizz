@@ -16,7 +16,7 @@
     ]
   },
   "eslintIgnore": [
-    "build"
+    "build", "master"
   ],
   "husky": {
     "hooks": {
