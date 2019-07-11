@@ -1,3 +1,5 @@
+/* eslint-disable */
+
 /* Sentry configuration */
 process.env.SENTRY_DSN =
   process.env.SENTRY_DSN ||
