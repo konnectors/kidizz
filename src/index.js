@@ -7,18 +7,18 @@ process.env.SENTRY_DSN =
 process.env['DEBUG'] = true
 
 /* GLOBALS */
-const Promise = require('bluebird')
-const path = require('path')
-const Readable = require('stream').Readable
-const moment = require('moment')
+const Promise   = require('bluebird')
+const path      = require('path')
+const Readable  = require('stream').Readable
+const moment    = require('moment')
 const ExifImage = require('exif').ExifImage
 
 var {
-  BaseKonnector,
-  requestFactory,
-  log,
-  updateOrCreate,
-  cozyClient,
+  BaseKonnector  ,
+  requestFactory ,
+  log            ,
+  updateOrCreate ,
+  cozyClient     ,
   errors
 } = require('cozy-konnector-libs')
 
@@ -70,6 +70,9 @@ async function start(fields) {
   } else {
     accData = this.getAccountData() // doesn't work in dev mode
   }
+  accData = Object.assign({}, accData)
+  log('debug', 'accData :')
+  log('debug', accData)
   if (!accData.photos) accData.photos = []
   if (!accData.albumsId) accData.albumsId = {}
   if (!accData.directoriesId) accData.directoriesId = {}
@@ -93,9 +96,10 @@ async function start(fields) {
 
   if (CTXT.NODE_ENV != 'development') {
     await this.saveAccountData({ history: CTXT.history }, { merge: false })
+    log('info', 'Account DATA saved')
   }
-  log('info', 'Account DATA saved')
 }
+
 
 /*******************************************************
 AUTHENTICATION
@@ -103,22 +107,22 @@ TODO : store the response cookie to be reused on next run
 ********************************************************/
 function authenticate(login, password) {
   return requestFactory({
-    json: true,
-    cheerio: false,
-    jar: true
+    json    : true,
+    cheerio : false,
+    jar     : true,
   })
     .post({
-      uri: 'https://api.kidizz.com/accounts/sign_in',
-      body: { account: { email: login, password: password, remember_me: 1 } },
+      uri    : 'https://api.kidizz.com/accounts/sign_in',
+      body   : { account: { email: login, password: password, remember_me: 1 } },
       headers: {
-        Connection: 'Keep-Alive',
-        Host: 'api.kidizz.com',
-        Accept: 'application/vnd.kidizz.api+json, application/json;q=0.9',
-        'cache-control': 'no-cache',
+        Connection       : 'Keep-Alive',
+        Host             : 'api.kidizz.com',
+        Accept           : 'application/vnd.kidizz.api+json, application/json;q=0.9',
+        'cache-control'  : 'no-cache',
         'Accept-Encoding': 'gzip',
-        'Content-Type': 'application/json; charset=UTF-8',
-        'X-API-Version': '1.0.1',
-        'User-Agent': 'Kidizz Android (com.kidizz.KidizzApp)/2.5.7'
+        'Content-Type'   : 'application/json; charset=UTF-8',
+        'X-API-Version'  : '1.0.1',
+        'User-Agent'     : 'Kidizz Android (com.kidizz.KidizzApp)/2.5.7'
       }
     })
     .then(async res => {
@@ -133,17 +137,14 @@ function authenticate(login, password) {
         if (!currentAlbumId) {
           // there is no album in history,
           // create the album if needed or fetch the album with the default name
-          const defaultAlbumName = `${child.firstname} - crèche ${
-            child.section_name
-          }`
+          const defaultAlbumName = `${child.firstname} - crèche ${child.section_name}`
           const [albumDoc] = await updateOrCreate(
             [{ name: defaultAlbumName, created_at: new Date() }],
             'io.cozy.photos.albums',
             ['name']
           )
           child.currentAlbumDoc = albumDoc
-          CTXT.history.albumsId[`${child.id}-${child.section_name}`] =
-            albumDoc._id
+          CTXT.history.albumsId[`${child.id}-${child.section_name}`] = albumDoc._id
         } else {
           // there was an album in history, retrieve the album doc from Cozy
           const albumDoc = await cozyClient.data.find(
@@ -155,41 +156,33 @@ function authenticate(login, password) {
         // 3/ child.currentDirDoc init
         log('debug', 'get dir id')
         let dirDoc
-        let currentDirId =
-          CTXT.history.directoriesId[`${child.id}-${child.section_name}`]
+        let currentDirId = CTXT.history.directoriesId[`${child.id}-${child.section_name}`]
         log('debug', currentDirId)
         if (currentDirId) {
           // there is a directory in history, just test it still exists
           dirDoc = await cozyClient.files
             .statById(currentDirId, false, { limit: 10000 })
-            .catch(() => undefined)
+            .catch( () => undefined)
         }
         if (!dirDoc) {
           // there is no existing directory in history
           // try to fetch the directory with the default path or create a new one
-          const defaultAlbumPath = `${CTXT.fields.folderPath}/${
-            child.firstname
-          } - crèche ${child.section_name}`
+          const defaultAlbumPath = `${CTXT.fields.folderPath}/${child.firstname} - crèche ${child.section_name}`
           log('debug', 'try to fetch ' + defaultAlbumPath)
           dirDoc = await cozyClient.files
             .statByPath(defaultAlbumPath)
             .catch(() => undefined)
           if (dirDoc) {
-            dirDoc = await cozyClient.files.statById(dirDoc._id, false, {
-              limit: 10000
-            })
+            dirDoc = await cozyClient.files.statById(dirDoc._id, false, {limit: 10000}) // because statByPath doesn't implement option:limit...
           }
-          log('debug', 'dir to be created or fetched :' + !!dirDoc)
+          log('debug', 'dir to be created or fetched :' + !dirDoc)
           log('debug', defaultAlbumPath)
           log('debug', dirDoc)
           if (!dirDoc) {
-            dirDoc = await cozyClient.files.createDirectoryByPath(
-              defaultAlbumPath
-            )
+            dirDoc = await cozyClient.files.createDirectoryByPath(defaultAlbumPath)
             dirDoc = await cozyClient.files.statById(dirDoc._id) // otherwise dirDoc.relations('contents') fails...
           }
-          CTXT.history.directoriesId[`${child.id}-${child.section_name}`] =
-            dirDoc._id
+          CTXT.history.directoriesId[`${child.id}-${child.section_name}`] = dirDoc._id
         }
         log('debug', 'in the end, dirDoc=', dirDoc)
         log(dirDoc.relations('contents'))
@@ -201,6 +194,7 @@ function authenticate(login, password) {
       throw new Error(errors.LOGIN_FAILED)
     })
 }
+
 
 /*******************************************************
 RETRIEVE NEWS for each child (of the user's account)
@@ -217,17 +211,17 @@ function retrieveNews() {
 function retrieveNews_rec(page, child) {
   return requestFactory({ json: true, cheerio: false, jar: true })
     .get({
-      qs: { current_child: child.id, page: page },
-      uri: 'https://api.kidizz.com/activities',
+      qs     : { current_child: child.id, page: page },
+      uri    : 'https://api.kidizz.com/activities',
       headers: {
-        Connection: 'Keep-Alive',
-        Host: 'api.kidizz.com',
-        Accept: 'application/vnd.kidizz.api+json, application/json;q=0.9',
-        'cache-control': 'no-cache',
-        'Accept-Encoding': 'gzip',
-        'Content-Type': 'application/json; charset=UTF-8',
-        'X-API-Version': '1.0.1',
-        'User-Agent': 'Kidizz Android (com.kidizz.KidizzApp)/2.5.7'
+        Connection        : 'Keep-Alive',
+        Host              : 'api.kidizz.com',
+        Accept            : 'application/vnd.kidizz.api+json, application/json;q=0.9',
+        'cache-control'   : 'no-cache',
+        'Accept-Encoding' : 'gzip',
+        'Content-Type'    : 'application/json; charset=UTF-8',
+        'X-API-Version'   : '1.0.1',
+        'User-Agent'      : 'Kidizz Android (com.kidizz.KidizzApp)/2.5.7'
       }
     })
     .then(news => {
@@ -235,12 +229,13 @@ function retrieveNews_rec(page, child) {
       //concat all the news pages into CTXT.children[i].news
       child.news = child.news.concat(news)
       return true // TODO : remove, only to shorten tests
-      return retrieveNews_rec(page + 1, child)
+      // return retrieveNews_rec(page + 1, child)
     })
     .catch(err => {
       log('error', err)
     })
 }
+
 
 /*******************************************************
 RETRIEVE PHOTOS for each child
@@ -253,6 +248,7 @@ function retrievePhotos() {
   return Promise.all(promises)
 }
 
+
 async function __retrievePhotos(child) {
   // A] prepare the photosList : [{url, newsDate, child, kidizzId},...]
   let photosList = []
@@ -263,10 +259,10 @@ async function __retrievePhotos(child) {
       let url = img.url
       url = path.dirname(url) + '/' + path.basename(url).replace(/^nc1000_/, '')
       let photo = {
-        url: url,
-        newsDate: moment(news.post.created_at),
-        child: child,
-        kidizzId: img.id
+        url      : url,
+        newsDate : moment(news.post.created_at),
+        child    : child,
+        kidizzId : img.id
       }
       photosList.push(photo)
     }
@@ -276,9 +272,9 @@ async function __retrievePhotos(child) {
     Promise.map(
       photosList,
       photo => downloadPhoto(photo, child.currentDirDoc),
-      { concurrency: 1 }
+      { concurrency: 20 }
     )
-      // C] Update photo album
+  // C] Update photo album
       .then(async mapresult => {
         let newPhotoIds
         newPhotoIds = mapresult.filter(item => item) // filters undefined items (photo with a file with same name)
@@ -288,10 +284,7 @@ async function __retrievePhotos(child) {
             child.currentAlbumDoc,
             newPhotoIds
           )
-          log(
-            'info',
-            `${newPhotoIds.length} files added to ${child.currentAlbumDoc.name}`
-          )
+          log('info', `${newPhotoIds.length} files added to ${child.currentAlbumDoc.name}`)
         }
       })
   )
@@ -328,10 +321,10 @@ function downloadPhoto(photo, dirDoc) {
       resolveWithFullResponse: true
     })
     .then(resp => {
-      photo.body = resp.body
-      photo.filename = path.basename(photo.url).replace(/\?.*/, '')
-      photo.ext = photo.filename.toLowerCase().match(/[\w]*$/)[0]
-      photo.mimeType = 'image/' + photo.ext
+      photo.body      = resp.body
+      photo.filename  = path.basename(photo.url).replace(/\?.*/, '')
+      photo.ext       = photo.filename.toLowerCase().match(/[\w]*$/)[0]
+      photo.mimeType  = 'image/' + photo.ext
       return getExifDate(photo)
     })
     .then(async exifDate => {
@@ -350,20 +343,20 @@ function downloadPhoto(photo, dirDoc) {
       if (isFileAlreadyInDir)
         throw new Error('File with same path already in Cozy')
       // Save photo
-      log('debug', 'save photo')
+      log('debug', 'save photo ' + photo.newsDate.format())
       return cozyClient.files.create(bufferToStream(photo.body), {
-        name: filename,
-        dirID: dirDoc._id,
-        contentType: 'image/JPG', // photo.mimeType, TODO
-        lastModifiedDate: photo.newsDate.format(),
-        metadata: { datetime: photo.newsDate.format() }
+        name             : filename,
+        dirID            : dirDoc._id,
+        contentType      : 'image/jpg', // photo.mimeType, TODO
+        lastModifiedDate : photo.newsDate.format(),
+        metadata         : { datetime: photo.newsDate.format() }
       })
     })
     .then(fileDoc => {
       const historyItem = {
-        cozyId: fileDoc._id,
-        kidizzId: photo.kidizzId,
-        retrievalDate: new Date().toISOString()
+        cozyId        : fileDoc._id,
+        kidizzId      : photo.kidizzId,
+        retrievalDate : new Date().toISOString()
       }
       CTXT.history.photos.push(historyItem)
       return historyItem
