@@ -235,7 +235,7 @@ function retrieveNews_rec(page, child) {
       //concat all the news pages into CTXT.children[i].news
       child.news = child.news.concat(news)
       return true // TODO : remove, only to shorten tests
-      return retrieveNews_rec(page + 1, child)
+      return retrieveNews_rec(page + 1, child) // eslint-disable-line no-unreachable
     })
     .catch(err => {
       log('error', err)
