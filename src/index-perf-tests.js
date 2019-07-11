@@ -1,7 +1,7 @@
 /* SET DEBUG ENVIRONEMNT VARIABLE TO FALSE TO AVOID LOGS FROM THE EXIF LIB */
 process.env['DEBUG'] = true
 
-filesIds = [
+var filesIds = [
   '44a682c90a14fa87f2269cb24814d930',
   '44a682c90a14fa87f2269cb24814dd76',
   '44a682c90a14fa87f2269cb248149139',
@@ -189,13 +189,11 @@ filesIds = [
 ]
 
 /* GLOBALS */
-const Promise = require('bluebird')
-const path = require('path')
 var { BaseKonnector, cozyClient, log } = require('cozy-konnector-libs')
 
 module.exports = new BaseKonnector(start)
 
-async function start(fields) {
+async function start() {
   let existingImgDoc
   var hrstart = process.hrtime()
   var n = 100
@@ -204,12 +202,13 @@ async function start(fields) {
     existingImgDoc = await cozyClient.files.statById(
       '44a682c90a14fa87f2269cb24811c74f'
     )
-    // log('debug', i + ' ' + !!existingImgDoc)
+    log('debug', i + ' ' + !!existingImgDoc)
   }
   var hrend = process.hrtime(hrstart)
   var dur = hrend[0] * 1000000000 + hrend[1] // in nano secondes
-  console.log(hrend[0], hrend[1])
-  console.log(
+  log('debug', hrend[0], hrend[1])
+  log(
+    'debug',
     `durée moyenne en appelant ${n} fois sur un meme fichier ${dur /
       n /
       1000000}  millisecondes`
@@ -222,14 +221,16 @@ async function start(fields) {
   }
   hrend = process.hrtime(hrstart)
   dur = hrend[0] * 1000000000 + hrend[1] // in nano secondes
-  console.log(hrend[0], hrend[1])
+  log('debug', hrend[0], hrend[1])
   n = filesIds.length
-  console.log(
+  log(
+    'debug',
     `durée moyenne en appelant sur ${n} fichier distincts " + ${dur /
       n /
       1000000} millisecondes`
   )
-  console.log(
+  log(
+    'debug',
     `durée totale  en appelant sur ${n} fichier distincts " + ${dur /
       1000000 /
       1000} secondes`

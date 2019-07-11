@@ -1,6 +1,5 @@
 /* SET DEBUG ENVIRONEMNT VARIABLE TO FALSE TO AVOID LOGS FROM THE EXIF LIB */
 process.env['DEBUG'] = true
-const now = require('performance-now')
 
 /* GLOBALS */
 const Promise = require('bluebird')
@@ -127,7 +126,7 @@ function authenticate(login, password) {
         let currentAlbumId =
           CTXT.history.albumsId[`${child.id}-${child.section_name}`]
         if (!currentAlbumId) {
-          // if there was no album in history
+          // there is no album in history,
           // create the album if needed or fetch the album with the default name
           const defaultAlbumName = `${child.firstname} - crèche ${
             child.section_name
@@ -148,26 +147,48 @@ function authenticate(login, password) {
           )
           child.currentAlbumDoc = albumDoc
         }
-        // 3/ child.currentDirId init
+        // 3/ child.currentDirDoc init
+        log('debug', 'get dir id')
+        let dirDoc
         let currentDirId =
           CTXT.history.directoriesId[`${child.id}-${child.section_name}`]
-        if (!currentDirId) {
-          // there was a directory in history, easy
-          child.currentDirId = currentDirId
-        } else {
-          // there was no directory in history
-          // create the directoryor fetch the one with the default path
-          const defaultAlbumPath = `${child.firstname} - crèche ${
-            child.section_name
-          }`
-          // const [albumDoc] = await updateOrCreate(
-          //   [{ name: defaultAlbumName, created_at: new Date() }],
-          //   'io.cozy.photos.albums',
-          //   ['name']
-          // )
-          // child.currentDirId = albumDoc._id
-          // CTXT.history.directoriesId[`${child.id}-${child.section_name}`] = albumDoc._id
+        log('debug', currentDirId)
+        if (currentDirId) {
+          // there is a directory in history, just test it still exists
+          dirDoc = await cozyClient.files
+            .statById(currentDirId, false, { limit: 10000 })
+            .catch(() => undefined)
         }
+        if (!dirDoc) {
+          // there is no existing directory in history
+          // try to fetch the directory with the default path or create a new one
+          const defaultAlbumPath = `${CTXT.fields.folderPath}/${
+            child.firstname
+          } - crèche ${child.section_name}`
+          log('debug', 'try to fetch ' + defaultAlbumPath)
+          dirDoc = await cozyClient.files
+            .statByPath(defaultAlbumPath)
+            .catch(() => undefined)
+          if (dirDoc) {
+            dirDoc = await cozyClient.files.statById(dirDoc._id, false, {
+              limit: 10000
+            })
+          }
+          log('debug', 'dir to be created or fetched :' + !!dirDoc)
+          log('debug', defaultAlbumPath)
+          log('debug', dirDoc)
+          if (!dirDoc) {
+            dirDoc = await cozyClient.files.createDirectoryByPath(
+              defaultAlbumPath
+            )
+            dirDoc = await cozyClient.files.statById(dirDoc._id) // otherwise dirDoc.relations('contents') fails...
+          }
+          CTXT.history.directoriesId[`${child.id}-${child.section_name}`] =
+            dirDoc._id
+        }
+        log('debug', 'in the end, dirDoc=', dirDoc)
+        log(dirDoc.relations('contents'))
+        child.currentDirDoc = dirDoc
       })
     })
     .catch(err => {
@@ -208,7 +229,7 @@ function retrieveNews_rec(page, child) {
       if (news.length === 0) return true
       //concat all the news pages into CTXT.children[i].news
       child.news = child.news.concat(news)
-      // return true
+      return true // TODO : remove, only to shorten tests
       return retrieveNews_rec(page + 1, child)
     })
     .catch(err => {
@@ -247,27 +268,26 @@ async function __retrievePhotos(child) {
   }
   // B] download all photos
   return (
-    Promise.map(photosList, photo => downloadPhoto(photo), { concurrency: 10 })
+    Promise.map(
+      photosList,
+      photo => downloadPhoto(photo, child.currentDirDoc),
+      { concurrency: 1 }
+    )
       // C] Update photo album
       .then(async mapresult => {
         let newPhotoIds
         newPhotoIds = mapresult.filter(item => item) // filters undefined items (photo with a file with same name)
         newPhotoIds = newPhotoIds.map(item => item.cozyId)
-        // // create the album if needed or fetch the correponding existing album
-        // const albumName = `${child.firstname} - crèche ${child.section_name}`
-        // const [albumDoc] = await updateOrCreate(
-        //   [{ name: albumName, created_at: new Date() }],
-        //   'io.cozy.photos.albums',
-        //   ['name']
-        // )
-        await cozyClient.data.addReferencedFiles(
-          child.currentAlbumDoc,
-          newPhotoIds
-        )
-        log(
-          'info',
-          `${newPhotoIds.length} files added to ${child.currentAlbumDoc.name}`
-        )
+        if (newPhotoIds.length > 0) {
+          await cozyClient.data.addReferencedFiles(
+            child.currentAlbumDoc,
+            newPhotoIds
+          )
+          log(
+            'info',
+            `${newPhotoIds.length} files added to ${child.currentAlbumDoc.name}`
+          )
+        }
       })
   )
 }
@@ -282,10 +302,7 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
     return false
   }
   log('debug', 'photo exists in history ' + kidizzPhotoId)
-
   const existingImgDoc = await cozyClient.files.statById(existingImg.cozyId) // TODO to be tested in dev mode (when getAccoundData will work)
-  // log('debug', 'existingImgDoc ' + existingImgDoc)
-
   if (!existingImgDoc) {
     log(
       'debug',
@@ -293,13 +310,11 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
     ) // TODO : to be tested
     return false
   }
-
   log('debug', 'test photo exists in history AND in Cozy')
-
   return true
 }
 
-function downloadPhoto(photo) {
+function downloadPhoto(photo, dirDoc) {
   return requestFactory({ json: true, cheerio: false, jar: true })
     .get({
       uri: photo.url,
@@ -316,36 +331,27 @@ function downloadPhoto(photo) {
     })
     .then(async exifDate => {
       let hour = ' 00h00 - '
-      if (exifDate) {
+      if (exifDate && photo.newsDate.diff(exifDate) < 86400000) {
         // if newsdate - exifDate < 1j (= 1*24*60*60*1000 ms) then use exif hours
-        if (photo.newsDate.diff(exifDate) < 86400000) {
-          hour = exifDate.format(' HH[h]mm - ')
-        }
+        hour = exifDate.format(' HH[h]mm - ')
       }
       const filename =
         photo.newsDate.format('YYYY-MM-DD') + hour + photo.filename
-
-      // Get dir ID
-      // TODO : le path en dev mode est cozy-konnector-dev-root ... comment le mettre dans Drive/Photos/Crèche ?
-      const dirDoc = await cozyClient.files.statByPath(CTXT.fields.folderPath)
-
       // Test filename existance
       // should not happen since we tested if the file is already in the Cozy
-      const isFileAlreadyInDir = await cozyClient.files
-        .statByPath(CTXT.fields.folderPath + '/' + filename) // TODO to be tested in dev mode
-        .catch(() => {
-          return false
-        })
+      const isFileAlreadyInDir = dirDoc
+        .relations('contents')
+        .find(file => filename == file.attributes.name)
       if (isFileAlreadyInDir)
         throw new Error('File with same path already in Cozy')
-
       // Save photo
       log('debug', 'save photo')
       return cozyClient.files.create(bufferToStream(photo.body), {
         name: filename,
         dirID: dirDoc._id,
-        contentType: 'image/JPG', // photo.mimeType,
-        lastModifiedDate: photo.newsDate.format()
+        contentType: 'image/JPG', // photo.mimeType, TODO
+        lastModifiedDate: photo.newsDate.format(),
+        metadata: { datetime: photo.newsDate.format() }
       })
     })
     .then(fileDoc => {
