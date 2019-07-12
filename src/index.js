@@ -71,15 +71,20 @@ async function start(fields) {
     accData = {}
   } else {
     accData = this.getAccountData() // doesn't work in dev mode
-    console.log(accData);
   }
-  accData = Object.assign({photos:[], albumsId:{}, directoriesId:{}}, accData)
+  // accData = Object.assign({photos:[], albumsId:{}, directoriesId:{}}, accData)
+  accData = {
+    photos       : accData.photos        ? accData.photos        : [] ,
+    albumsId     : accData.albumsId      ? accData.albumsId      : {} ,
+    directoriesId: accData.directoriesId ? accData.directoriesId : {} ,
+  }
   log('debug', 'accData :')
-  console.log(accData);
   log('debug', accData)
-  if (!accData.photos) accData.photos = []
-  if (!accData.albumsId) accData.albumsId = {}
-  if (!accData.directoriesId) accData.directoriesId = {}
+  log('debug', 'secret.accData :')
+  log('secret', accData)
+  // if (!accData.photos) accData.photos = []
+  // if (!accData.albumsId) accData.albumsId = {}
+  // if (!accData.directoriesId) accData.directoriesId = {}
   CTXT.history = accData
 
   log('info', 'Authenticating ...')
@@ -294,6 +299,7 @@ async function __retrievePhotos(child) {
   )
 }
 
+
 async function isPhotoAlreadyInCozy(kidizzPhotoId) {
   // TODO full history cycle to be tested
   const existingImg = CTXT.history.photos.find(
@@ -315,6 +321,7 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
   log('debug', 'test photo exists in history AND in Cozy')
   return true
 }
+
 
 function downloadPhoto(photo, dirDoc) {
   return requestFactory({ json: true, cheerio: false, jar: true })
