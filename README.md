@@ -15,6 +15,11 @@ TODO
 3. faire un album par enfant avec les noms et photo des enfants de sa classe ainsi que des encadrants.
 4. créer un trombi html de la classe de chaque enfant
 
+PlAN DE TESTS
+--------------
+1. import from scratch : ok
+2. renommer un l'album, supprimer une photo de drive, vider corbeille, vérifier qu'elle n'est plus dans l'album, faire tourner le connecteur : 
+
 
 What's Cozy?
 ------------
