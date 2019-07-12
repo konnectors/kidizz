@@ -71,9 +71,11 @@ async function start(fields) {
     accData = {}
   } else {
     accData = this.getAccountData() // doesn't work in dev mode
+    console.log(accData);
   }
-  accData = Object.assign({}, accData)
+  accData = Object.assign({photos:[], albumsId:{}, directoriesId:{}}, accData)
   log('debug', 'accData :')
+  console.log(accData);
   log('debug', accData)
   if (!accData.photos) accData.photos = []
   if (!accData.albumsId) accData.albumsId = {}
@@ -97,7 +99,7 @@ async function start(fields) {
   log('debug', CTXT.history)
 
   if (CTXT.NODE_ENV != 'development') {
-    await this.saveAccountData({ history: CTXT.history }, { merge: false })
+    await this.saveAccountData(CTXT.history, { merge: false })
     log('info', 'Account DATA saved')
   }
 }
