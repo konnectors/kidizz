@@ -55,6 +55,6 @@
     "performance-now": "^2.1.0",
     "svgo": "1.2.2",
     "webpack": "4.35.3",
-    "webpack-cli": "3.3.1"
+    "webpack-cli": "3.3.6"
   }
 }
