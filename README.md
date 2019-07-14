@@ -3,22 +3,16 @@
 
 TODO
 ------------
-3. utiliser la détection du mode dev pour gérer le getAccountData et saveAccountData
-3. mettre le nom de l'album photo dans l'account data
-4. mettre les photo dans des répertoires différents par enfants et stocker les id dans accData
-3. test : importer, supprimer une photo locale : il voit toujours la photo et ne le réimporte pas. ??
-4. limiter les news que l'on Récupère
-5.
-2. improve ? : log('debug', myString, thirdArgument) : quid du thirdArgument ?
-2. deduplicate photo before download : pb = getAccoundData ne marche pas en mode dev et en standalone c'est cozyClient.files.statById() qui ne marche pas...
-2. créer un album par enfant
-3. faire un album par enfant avec les noms et photo des enfants de sa classe ainsi que des encadrants.
-4. créer un trombi html de la classe de chaque enfant
+
+- limiter les news que l'on Récupère
+- créer un trombi html de la classe de chaque enfant
+- improve ? : log('debug', myString, thirdArgument) : quid du thirdArgument ?
+- faire un album par enfant avec les noms et photo des enfants de sa classe ainsi que des encadrants.
 
 PlAN DE TESTS
 --------------
 1. import from scratch : ok
-2. renommer un l'album, supprimer une photo de drive, vider corbeille, vérifier qu'elle n'est plus dans l'album, faire tourner le connecteur : 
+2. renommer un l'album, supprimer une photo de drive, vider corbeille, vérifier qu'elle n'est plus dans l'album, faire tourner le connecteur :
 
 
 What's Cozy?
