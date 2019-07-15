@@ -14,6 +14,7 @@ const path      = require('path')
 const Readable  = require('stream').Readable
 const moment    = require('moment')
 const ExifImage = require('exif').ExifImage
+const mime      = require('mime')
 
 var {
   BaseKonnector  ,
@@ -413,7 +414,8 @@ function downloadPhoto(photo) {
       photo.body      = resp.body
       photo.filename  = path.basename(photo.url).replace(/\?.*/, '')
       photo.ext       = photo.filename.toLowerCase().match(/[\w]*$/)[0]
-      photo.mimeType  = 'image/' + photo.ext
+      // photo.mimeType  = 'image/' + photo.ext
+      photo.mimeType  = mime.getType(photo.ext)
       return getExifDate(photo)
     })
     .then(async exifDate => {
@@ -431,13 +433,18 @@ function downloadPhoto(photo) {
       if (isFileAlreadyInDir)
         throw new Error('File with same path already in Cozy')
       // Save photo
-      log('debug', 'save photo ' + filename)
+      log('debug', 'save photo ' + filename + ' ' +  photo.mimeType )
+      log('debug', 'save photo ' + filename + ' ' + photo.newsDate.format() )
+      log('debug', 'save photo ' + filename + ' ' +  new Date().toISOString() )
       return cozyClient.files.create(bufferToStream(photo.body), {
         name             : filename,
         dirID            : photo.child.currentDirDoc._id,
-        contentType      : 'image/jpg', // photo.mimeType, TODO
-        lastModifiedDate : photo.newsDate.format(),
-        metadata         : { datetime: photo.newsDate.format() }
+        // contentType      : 'image/jpeg', // photo.mimeType, TODO
+        contentType      : photo.mimeType, // TODO
+        // lastModifiedDate : photo.newsDate.format(),
+        lastModifiedDate : new Date().toISOString(),
+        // metadata         : { datetime: photo.newsDate.format() }
+        // metadata         : { datetime: new Date().toISOString() }
       })
     })
     .then(fileDoc => {
@@ -639,7 +646,7 @@ function downloadMatePhoto(photo) {
     })
     .then(resp => {
       photo.ext       = path.extname(new URL(photo.url).pathname).slice(1)
-      photo.mimeType  = 'image/' + photo.ext
+      photo.mimeType  = mime.getType(photo.ext) //'image/' + photo.ext
       // Test filename existance
       const filename = `${mate.firstname} ${mate.lastname}.${photo.ext}`
       const isAvatarAlreadyInDir = child.currentMatesDirDoc
@@ -651,7 +658,7 @@ function downloadMatePhoto(photo) {
         photo.fileIdToUpdated  = isAvatarAlreadyInDir._id
       }
       // Save avatar
-      log('debug', 'save avatar ' + filename)
+      log('debug', 'save avatar ' + filename + ' ' + photo.mimeType)
       if (photo.fileIdToUpdated) {
         return cozyClient.files.updateById(
           photo.fileIdToUpdated,
@@ -659,7 +666,7 @@ function downloadMatePhoto(photo) {
           {
             contentType      : photo.mimeType, // TODO
             lastModifiedDate : new Date(),
-            metadata         : { datetime: new Date().toISOString() },
+            // metadata         : { datetime: new Date().toISOString() },
           }
         )
       } else {
@@ -668,7 +675,7 @@ function downloadMatePhoto(photo) {
           dirID            : photo.matesAvatarDirId,
           contentType      : photo.mimeType, // TODO
           lastModifiedDate : new Date().toISOString(),
-          metadata         : { datetime: new Date().toISOString() },
+          // metadata         : { datetime: new Date().toISOString() },
         })
       }
     })
