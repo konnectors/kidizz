@@ -15,6 +15,7 @@ const Readable  = require('stream').Readable
 const moment    = require('moment')
 const ExifImage = require('exif').ExifImage
 const mime      = require('mime')
+const URL       = require('url')
 
 var {
   BaseKonnector  ,
@@ -634,7 +635,7 @@ function downloadMatePhoto(photo) {
   if (photo.url[0] === '/') {
     photo.url = 'https://api.kidizz.com' + photo.url
   }
-  photo.ext       = path.extname(new URL(photo.url).pathname).slice(1).toLowerCase()
+  photo.ext       = path.extname(URL.parse(photo.url).pathname).slice(1).toLowerCase()
   photo.mimeType  = mime.getType(photo.ext)
   log('debug', `download photo mate : ${mate.firstname} ${mate.lastname}.${photo.ext}`)
   return requestFactory({ json: true, cheerio: false, jar: true })
