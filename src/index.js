@@ -563,7 +563,7 @@ async function retrieveAllChildrenFromSchool(){
 async function __retrieveMates(child) {
   // A] get all the children of the same section
   const mates    = CTXT.school.children.filter(mate => mate.section_id == child.section_id)
-  // B] prepare the avatarList : [ {url, mate, child, matesAvatarDirId, fileIdToUpdated},...]
+  // B] prepare the avatarList : [ {url, mate, child, matesAvatarDirId, fileIdToUpdate},...]
   let avatarList = []
   const matesAvatarDirId = CTXT.history.directoriesId[`${child.id}-${child.section_name}-matesDir`]
   for (let mate of mates) {
@@ -573,7 +573,7 @@ async function __retrieveMates(child) {
       mate             : mate,
       child            : child,
       matesAvatarDirId : matesAvatarDirId,
-      fileIdToUpdated  : mate.existingAvatardId, // optionnal, might be undefined
+      fileIdToUpdate   : mate.existingAvatardId, // optionnal, might be undefined
     }
     avatarList.push(photo)
   }
@@ -655,13 +655,13 @@ function downloadMatePhoto(photo) {
       if (isAvatarAlreadyInDir) {
         log('debug', 'avatar with same filename already in mates dir, it will be updated ' + filename)
         mate.existingAvatardId = isAvatarAlreadyInDir._id
-        photo.fileIdToUpdated  = isAvatarAlreadyInDir._id
+        photo.fileIdToUpdate   = isAvatarAlreadyInDir._id
       }
       // Save avatar
-      if (photo.fileIdToUpdated) {
+      if (photo.fileIdToUpdate) {
         log('debug', 'update avatar ' + filename)
         return cozyClient.files.updateById(
-          photo.fileIdToUpdated,
+          photo.fileIdToUpdate,
           bufferToStream(resp.body),
           {
             contentType      : photo.mimeType, // TODO
@@ -675,7 +675,7 @@ function downloadMatePhoto(photo) {
           name             : filename,
           dirID            : photo.matesAvatarDirId,
           contentType      : photo.mimeType, // TODO
-          lastModifiedDate : new Date().toISOString(),
+          lastModifiedDate : new Date(),
           // metadata         : { datetime: new Date().toISOString() },
         })
       }
@@ -687,7 +687,7 @@ function downloadMatePhoto(photo) {
         retrievalDate  : new Date().toISOString(),
       }
       CTXT.history.mates[`${child.id}-${child.section_name}-${mate.id}`] = historyMate
-      if (photo.fileIdToUpdated){
+      if (photo.fileIdToUpdate){
         return undefined //  if the avatar file has been updated, then it is not to be added to the album
       }
       return historyMate
