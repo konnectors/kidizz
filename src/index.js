@@ -385,7 +385,7 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
     img => img.kidizzId === kidizzPhotoId
   )
   if (!existingImg) {
-    log('debug', "photo doesn't exists in history", kidizzPhotoId)
+    log('debug', "photo doesn't exists in history " + kidizzPhotoId)
     return false
   }
   log('debug', 'photo exists in history ' + kidizzPhotoId)
@@ -433,9 +433,7 @@ function downloadPhoto(photo) {
       if (isFileAlreadyInDir)
         throw new Error('File with same path already in Cozy')
       // Save photo
-      log('debug', 'save photo ' + filename + ' ' +  photo.mimeType )
-      log('debug', 'save photo ' + filename + ' ' + photo.newsDate.format() )
-      log('debug', 'save photo ' + filename + ' ' +  new Date().toISOString() )
+      log('debug', 'save photo ' + filename )
       return cozyClient.files.create(bufferToStream(photo.body), {
         name             : filename,
         dirID            : photo.child.currentDirDoc._id,
@@ -607,7 +605,7 @@ async function isMatePhotoAlreadyInCozy(child, mate) {
   // check the mate's avatar is in history
   const storedMate = CTXT.history.mates[`${child.id}-${child.section_name}-${mate.id}`]
   if (!storedMate) {
-    log('debug', 'Mate\'s photo doesn\'t exists in history')
+    log('debug', `Mate's photo doesn't exists in history : ${mate.firstname} ${mate.lastname} - ${mate.id}` )
     return false
   }
   // check if the previously downloaded avatar still exists
@@ -636,7 +634,9 @@ function downloadMatePhoto(photo) {
   if (photo.url[0] === '/') {
     photo.url = 'https://api.kidizz.com' + photo.url
   }
-  log('debug', 'download photo mate : ' + photo.url)
+  photo.ext       = path.extname(new URL(photo.url).pathname).slice(1).toLowerCase()
+  photo.mimeType  = mime.getType(photo.ext)
+  log('debug', `download photo mate : ${mate.firstname} ${mate.lastname}.${photo.ext}`)
   return requestFactory({ json: true, cheerio: false, jar: true })
     .get({
       uri                     : photo.url,
@@ -645,21 +645,20 @@ function downloadMatePhoto(photo) {
       resolveWithFullResponse : true,
     })
     .then(resp => {
-      photo.ext       = path.extname(new URL(photo.url).pathname).slice(1)
-      photo.mimeType  = mime.getType(photo.ext) //'image/' + photo.ext
+
       // Test filename existance
       const filename = `${mate.firstname} ${mate.lastname}.${photo.ext}`
       const isAvatarAlreadyInDir = child.currentMatesDirDoc
         .relations('contents')
         .find(file => filename == file.attributes.name)
       if (isAvatarAlreadyInDir) {
-        log('debug', 'avatar with same filename already in mates dir, it will be updated')
+        log('debug', 'avatar with same filename already in mates dir, it will be updated ' + filename)
         mate.existingAvatardId = isAvatarAlreadyInDir._id
         photo.fileIdToUpdated  = isAvatarAlreadyInDir._id
       }
       // Save avatar
-      log('debug', 'save avatar ' + filename + ' ' + photo.mimeType)
       if (photo.fileIdToUpdated) {
+        log('debug', 'update avatar ' + filename)
         return cozyClient.files.updateById(
           photo.fileIdToUpdated,
           bufferToStream(resp.body),
@@ -670,6 +669,7 @@ function downloadMatePhoto(photo) {
           }
         )
       } else {
+        log('debug', 'create avatar ' + filename)
         return cozyClient.files.create(bufferToStream(resp.body), {
           name             : filename,
           dirID            : photo.matesAvatarDirId,
