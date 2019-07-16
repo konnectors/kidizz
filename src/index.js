@@ -664,8 +664,8 @@ function downloadMatePhoto(photo) {
           photo.fileIdToUpdate,
           bufferToStream(resp.body),
           {
-            contentType      : photo.mimeType, // TODO
-            lastModifiedDate : new Date(),
+            contentType      : photo.mimeType,
+            lastModifiedDate : new Date().toISOString(),
             // metadata         : { datetime: new Date().toISOString() },
           }
         )
@@ -674,8 +674,8 @@ function downloadMatePhoto(photo) {
         return cozyClient.files.create(bufferToStream(resp.body), {
           name             : filename,
           dirID            : photo.matesAvatarDirId,
-          contentType      : photo.mimeType, // TODO
-          lastModifiedDate : new Date(),
+          contentType      : photo.mimeType,
+          lastModifiedDate : new Date().toISOString(),
           // metadata         : { datetime: new Date().toISOString() },
         })
       }
