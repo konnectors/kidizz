@@ -103,7 +103,7 @@ async function start(fields) {
     directoriesId: accData.directoriesId ? accData.directoriesId : {} ,
     mates        : accData.mates         ? accData.mates         : {} ,
   }
-  log('debug', 'histData :')
+  log('debug', 'histData :' + histData )
   log('debug', JSON.stringify(histData))
   log('debug', 'secret.histData :')
   log('secret', histData) // TODO utile ?
@@ -398,7 +398,7 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
     ) // TODO : to be tested
     return false
   }
-  log('debug', 'photo exists in history AND in Cozy')
+  log('debug', 'photo exists in history AND in Cozy' + existingImg.cozyId)
   return true
 }
 
@@ -612,14 +612,17 @@ async function isMatePhotoAlreadyInCozy(child, mate) {
   // check if the previously downloaded avatar still exists
   const existingAvatarDoc = await cozyClient.files.statById(storedMate.cozyAvatarId)
   if (!existingAvatarDoc) {
-    log('debug', 'Mate\'s photo exists in history BUT NOT in Cozy')
+    log('debug', `Mate's photo exists in history BUT NOT in Cozy : ${mate.firstname} ${mate.lastname} - ${mate.id}`)
     return false
   } else {
     mate.existingAvatardId = existingAvatarDoc._id
   }
   // check the avatar has not been modifed on kidizz
   if (storedMate.kidizzAvatarId !== mate.avatar.avatar.url ) {
-    log('debug', 'Mate\'s photo has been updated on Kidizz')
+    log('debug', `Mate\'s photo has been updated on Kidizz : ${mate.firstname} ${mate.lastname} - ${mate.id}`)
+    log('debug', storedMate.kidizzAvatarId )
+    log('debug', mate.avatar.avatar.url )
+
     return false
   }
   // else the local avatar is uptodate
