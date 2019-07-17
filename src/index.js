@@ -442,6 +442,9 @@ function downloadPhoto(photo) {
         contentType      : photo.mimeType, // TODO
         // lastModifiedDate : photo.newsDate.format(),
         lastModifiedDate : new Date().toISOString(),
+        metadata: {
+          datetime: photo.newsDate.format()
+        }
         // metadata         : { datetime: photo.newsDate.format() }
         // metadata         : { datetime: new Date().toISOString() }
       })
