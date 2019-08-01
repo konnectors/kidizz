@@ -3,6 +3,8 @@ const CopyPlugin = require('copy-webpack-plugin')
 const webpack = require('webpack')
 const fs = require('fs')
 const SvgoInstance = require('svgo')
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer')
+        .BundleAnalyzerPlugin
 
 const entry = require('./package.json').main
 
@@ -46,7 +48,8 @@ module.exports = {
     ]),
     new webpack.DefinePlugin({
       __WEBPACK_PROVIDED_MANIFEST__: JSON.stringify(readManifest())
-    })
+    }),
+    new BundleAnalyzerPlugin({ analyzerMode: 'static' })
   ],
   module: {
     // to ignore the warnings like :

@@ -26,7 +26,7 @@ var {
   errors
 } = require('cozy-konnector-libs')
 
-const CTXT = {} // persists the context throug the run
+const CTXT = {} // persists the CONTEXT throug the run
 /*
 CTXT = {
   fields   : fields ,         //
@@ -87,30 +87,49 @@ module.exports = new BaseKonnector(start)
 // information (fields). When you run this connector yourself in "standalone" mode or "dev" mode,
 // the account information come from ./konnector-dev-config.json file
 async function start(fields) {
-  CTXT.fields = fields
+  CTXT.fields   = fields
   CTXT.NODE_ENV = process.env.NODE_ENV
 
-  let accData
+  let accData, accDataFile
   if (CTXT.NODE_ENV == 'development') {
-    accData = {}
+    let dirDoc, accDataFileText
+    log('debug', `=============`)
+    log('debug', `dev mode, get accData is simulated in the file ${CTXT.fields.folderPath}/accDataFile.json`)
+    accDataFile = await cozyClient.files
+      .statByPath(`${CTXT.fields.folderPath}/accDataFile.json`)
+      .catch(() => undefined)
+    if (accDataFile) {
+      accDataFileText = await cozyClient.files.downloadById(accDataFile._id)
+      accDataFileText = await accDataFileText.text()
+    }
+    if (!accDataFile || accDataFile.attributes.trashed ) {
+      // file doesn't exists, create one
+      dirDoc = await cozyClient.files.statByPath(CTXT.fields.folderPath)
+        .catch(() => undefined)
+      accDataFile = await cozyClient.files.create(
+        ' ',
+        {
+          dirID            : dirDoc._id,
+          name             : 'accDataFile.json',
+          contentType      : 'text/plain',
+          lastModifiedDate : new Date(),
+        }
+      )
+      accData = {}
+    } else {
+      // file exists, download the data :
+      if (accDataFileText.length < 2) {
+        accData = {}
+      } else {
+        accData = JSON.parse(await accDataFileText)
+      }
+    }
+    log('debug', `=============`)
   } else {
-    accData = this.getAccountData() // doesn't work in dev mode
+    // doesn't work in dev mode
+    accData = this.getAccountData()
   }
-  // accData = Object.assign({photos:[], albumsId:{}, directoriesId:{}}, accData)
-  let histData = {
-    photos       : accData.photos        ? accData.photos        : [] ,
-    albumsId     : accData.albumsId      ? accData.albumsId      : {} ,
-    directoriesId: accData.directoriesId ? accData.directoriesId : {} ,
-    mates        : accData.mates         ? accData.mates         : {} ,
-  }
-  log('debug', 'histData :' + histData )
-  log('debug', JSON.stringify(histData))
-  log('debug', 'secret.histData :')
-  log('secret', histData) // TODO utile ?
-  // if (!histData.photos) histData.photos = []
-  // if (!histData.albumsId) histData.albumsId = {}
-  // if (!histData.directoriesId) histData.directoriesId = {}
-  CTXT.history = histData
+  CTXT.history = Object.assign({photos:[], albumsId:{}, directoriesId:{}, mates:{}}, accData)
 
   log('info', 'Authenticating ...')
   await authenticateAndInitChildData(fields.login, fields.password)
@@ -120,20 +139,29 @@ async function start(fields) {
   await retrieveNews()
   log('info', 'News successfully retrieved')
 
-  log('info', 'Fetching the photos')
+  log('info', 'Retrieving photos')
   await retrievePhotos()
   log('info', 'Photos successfully retrieved')
 
-  log('info', 'Fetching the children\'s mates')
+  log('info', 'Retrieving the children\'s mates avatars')
   await retrieveChildrenMates()
-  log('info', 'ChildrensMates successfully retrieved')
+  log('info', 'Children\'s Mates successfully retrieved')
 
-  log('info', 'Save Account DATA...')
-  log('debug', 'account data to save is :')
-  log('debug', JSON.stringify(CTXT.history))
+  log('info', 'Save Account DATA')
+  // log('debug', 'account data to save is :')
+  // log('debug', JSON.stringify(CTXT.history)) // no output in prod logs...
   if (CTXT.NODE_ENV != 'development') {
     await this.saveAccountData(CTXT.history, { merge: false })
     log('info', 'Account DATA saved')
+  } else {
+    await cozyClient.files.updateById(
+      accDataFile._id,
+      JSON.stringify(CTXT.history, null, '\t'),
+      {
+        contentType      : 'text/plain',
+        lastModifiedDate : new Date()  ,
+      }
+    )
   }
 }
 
@@ -159,6 +187,7 @@ function authenticateAndInitChildData(login, password) {
       }
     })
     .then(async res => {
+      log('debug', 'auth OK')
       // retrieve children and init data (news, currentAlbumDoc, currentDirDoc, currentAvatarDirDoc)
       CTXT.children = res.user.children
       for (let child of CTXT.children) {
@@ -180,6 +209,19 @@ async function retrieveChildData(child) {
   child.news = []
   // __2/ child.currentAlbumDoc init
   let currentAlbumId = CTXT.history.albumsId[`${child.id}-${child.section_name}-photoAlbum`]
+  if (currentAlbumId) {
+    // there was an album in history, try to retrieve the album doc from Cozy
+    const albumDoc = await cozyClient.data.find(
+        'io.cozy.photos.albums',
+        currentAlbumId
+      ).catch( () => undefined)
+    if (albumDoc) {
+      child.currentAlbumDoc = albumDoc
+      currentAlbumId = albumDoc._id
+    } else {
+      currentAlbumId = undefined
+    }
+  }
   if (!currentAlbumId) {
     // there is no album in history,
     // create the album if needed or fetch the album with the default name
@@ -191,13 +233,6 @@ async function retrieveChildData(child) {
     )
     child.currentAlbumDoc = albumDoc
     CTXT.history.albumsId[`${child.id}-${child.section_name}-photoAlbum`] = albumDoc._id
-  } else {
-    // there was an album in history, retrieve the album doc from Cozy
-    const albumDoc = await cozyClient.data.find(
-      'io.cozy.photos.albums',
-      currentAlbumId
-    )
-    child.currentAlbumDoc = albumDoc
   }
   // __3/ child.currentDirDoc init
   log('debug', 'get photo dir id')
@@ -209,7 +244,8 @@ async function retrieveChildData(child) {
       .statById(currentDirId, false, { limit: 10000 })
       .catch( () => undefined)
   }
-  if (!dirDoc) {
+
+  if (!dirDoc || !notInTrash(dirDoc)) {
     // there is no existing directory in history
     // try to fetch the directory with the default path or create a new one
     const defaultAlbumPath = `${CTXT.fields.folderPath}/${child.firstname} - crèche ${child.section_name}`
@@ -237,11 +273,11 @@ async function retrieveChildData(child) {
   if (currentDirId) {
     // there is a directory in history, just test it still exists
     dirDoc = await cozyClient.files
-      .statById(currentDirId, false, { limit: 10000 })
+      .statById(currentDirId, false, { limit: 100000 })
       .catch( () => undefined)
   }
-  if (!dirDoc) {
-    // there is no existing directory for mates in history
+  if (!dirDoc || !notInTrash(dirDoc)) {
+    // there is no existing directory for mates in history (or dir in history no longer exists)
     // try to fetch the directory with the default path or create a new one
     const defaultMatesDirPath  = `${CTXT.fields.folderPath}/${defaultMatesAlbumName}`
     log('debug', 'no dir in history, try to fetch ' + defaultMatesDirPath)
@@ -253,7 +289,7 @@ async function retrieveChildData(child) {
     }
     log('debug', defaultMatesDirPath)
     if (!dirDoc) {
-      log('debug', 'no dit to fetch, create one ')
+      log('debug', 'no dir to fetch, create one ')
       dirDoc = await cozyClient.files.createDirectoryByPath(defaultMatesDirPath)
       dirDoc = await cozyClient.files.statById(dirDoc._id) // otherwise dirDoc.relations('contents') fails...
     }
@@ -265,21 +301,23 @@ async function retrieveChildData(child) {
   log('debug', 'Find the mates avatar album')
   let matesAlbumDoc
   let currentMatesAlbumId = CTXT.history.albumsId[`${child.id}-${child.section_name}-mateAlbumId`]
-  if (!currentMatesAlbumId) {
-    // there is no album in history,
-    // create the album if needed or fetch the album with the default name
-    [matesAlbumDoc] = await updateOrCreate(
-      [{ name: defaultMatesAlbumName, created_at: new Date() }],
-      'io.cozy.photos.albums',
-      ['name']
-    )
-    CTXT.history.albumsId[`${child.id}-${child.section_name}-mateAlbumId`] = matesAlbumDoc._id
-  } else {
-    // there was an album in history, retrieve the album doc from Cozy
+  if (currentMatesAlbumId) {
+    // there was an album in history, try to retrieve the album doc from Cozy
     matesAlbumDoc = await cozyClient.data.find(
-      'io.cozy.photos.albums',
-      currentMatesAlbumId
-    )
+        'io.cozy.photos.albums',
+        currentMatesAlbumId
+      )
+    if (!matesAlbumDoc) currentMatesAlbumId = undefined
+  }
+  if (!currentMatesAlbumId) {
+    // There is no album in history or the history album no longer exists
+    // Create the album if needed or fetch the album with the default name
+    [matesAlbumDoc] = await updateOrCreate(
+        [{ name: defaultMatesAlbumName, created_at: new Date() }],
+        'io.cozy.photos.albums',
+        ['name']
+      )
+    CTXT.history.albumsId[`${child.id}-${child.section_name}-mateAlbumId`] = matesAlbumDoc._id
   }
   log('debug', 'in the end, mates avatar album Doc id = ' + matesAlbumDoc._id)
   child.currentMatesAlbumDoc = matesAlbumDoc
@@ -344,18 +382,29 @@ async function __retrievePhotos(child) {
   for (let news of child.news) {
     if (!(news.post && news.post.images)) continue // check the post has some photo
     for (let img of news.post.images) {
-      if (await isPhotoAlreadyInCozy(img.id)) continue // check the image has not already been downloded
+      let isInCozy = await isPhotoAlreadyInCozy(img.id)
+      // check the image has not already been downloded
+      if (isInCozy.docExists) continue
       let url = img.url
       url = path.dirname(url) + '/' + path.basename(url).replace(/^nc1000_/, '')
+      //
       let photo = {
-        url      : url,
-        newsDate : moment(news.post.created_at),
-        child    : child,
-        kidizzId : img.id
+        url             : url                          ,
+        fileIdToUpdate  : null                         ,
+        isAlbumToUpdate : true                         ,
+        newsDate        : moment(news.post.created_at) ,
+        child           : child                        ,
+        kidizzId        : img.id                       ,
+        histItem        : isInCozy.histItem            , // history item if the photo is already in history, null otherwise
       }
       photosList.push(photo)
     }
   }
+  // console.log('currentDirDoc content :', child.currentDirDoc.relations('contents'));
+  // child.currentDirDoc.relations('contents').forEach(file => {
+  //   console.log(file.attributes.name);
+  //   testedFilename === file.attributes.name
+  // })
   // B] download all photos
   return (
     Promise.map(
@@ -373,37 +422,45 @@ async function __retrievePhotos(child) {
             child.currentAlbumDoc,
             newPhotoIds
           )
-          log('info', `${newPhotoIds.length} files added to ${child.currentAlbumDoc.name}`)
         }
+        log('info', `${newPhotoIds.length} files added to ${child.currentAlbumDoc.name}`)
+
       })
   )
 }
 
 
+
+
+/*******************************************************
+ Returns :
+  {
+    docExists  : bolean       ,
+    histItem   : history item ,
+  }
+********************************************************/
 async function isPhotoAlreadyInCozy(kidizzPhotoId) {
   // TODO full history cycle to be tested
-  const existingImg = CTXT.history.photos.find(
+  const existingHistItem = CTXT.history.photos.find(
     img => img.kidizzId === kidizzPhotoId
   )
-  if (!existingImg) {
+  if (!existingHistItem) {
     log('debug', "photo doesn't exists in history " + kidizzPhotoId)
-    return false
+    return {docExists:false, histItem: null}
   }
-  log('debug', 'photo exists in history ' + kidizzPhotoId)
-  const existingImgDoc = await cozyClient.files.statById(existingImg.cozyId) // TODO to be tested in dev mode (when getAccoundData will work)
-  if (!existingImgDoc) {
-    log(
-      'debug',
-      'photo exists in history but NOT in Cozy - ' + existingImg.cozyId
-    ) // TODO : to be tested
-    return false
+  const existingHistItemDoc = await cozyClient.files.statById(existingHistItem.cozyId)
+    .catch(() => undefined) // TODO to be tested in dev mode (when getAccoundData will work)
+  if (!existingHistItemDoc || existingHistItemDoc.attributes.trashed) {
+    log('debug', 'photo exists in history but NOT in Cozy - ' + existingHistItem.cozyId) // TODO : to be tested
+    return {docExists:false, histItem: existingHistItem}
   }
-  log('debug', 'photo exists in history AND in Cozy' + existingImg.cozyId)
-  return true
+  log('debug', 'photo exists in history AND in Cozy : ' + existingHistItem.cozyId)
+  return {docExists:true, histItem: existingHistItem}
 }
 
 
 function downloadPhoto(photo) {
+  log('debug', 'start download photo ' + photo.kidizzId)
   return requestFactory({ json: true, cheerio: false, jar: true })
     .get({
       uri                     : photo.url,
@@ -415,7 +472,6 @@ function downloadPhoto(photo) {
       photo.body      = resp.body
       photo.filename  = path.basename(photo.url).replace(/\?.*/, '')
       photo.ext       = photo.filename.toLowerCase().match(/[\w]*$/)[0]
-      // photo.mimeType  = 'image/' + photo.ext
       photo.mimeType  = mime.getType(photo.ext)
       return getExifDate(photo)
     })
@@ -425,42 +481,63 @@ function downloadPhoto(photo) {
         // if newsdate - exifDate < 1j (= 1*24*60*60*1000 ms) then use exif hours
         hour = exifDate.format(' HH[h]mm - ')
       }
-      const filename = photo.newsDate.format('YYYY-MM-DD') + hour + photo.filename
-      // Test filename existance
-      // should not happen since we tested if the file is already in the Cozy
-      const isFileAlreadyInDir = photo.child.currentDirDoc
-        .relations('contents')
-        .find(file => filename == file.attributes.name)
-      if (isFileAlreadyInDir)
-        throw new Error('File with same path already in Cozy')
+      // Test filename existance to find the right filename
+      // should not happen since we tested if the file is already in the history
+      // but can happen if the history has been reset
+      let   filename           = photo.newsDate.format('YYYY-MM-DD') + hour + photo.filename
+      const dirContents        = photo.child.currentDirDoc.relations('contents')
+      const isFileAlreadyInDir = dirContents.find(file => filename === file.attributes.name)
+      if (isFileAlreadyInDir) photo.fileIdToUpdate = isFileAlreadyInDir._id
+
       // Save photo
-      log('debug', 'save photo ' + filename )
-      return cozyClient.files.create(bufferToStream(photo.body), {
-        name             : filename,
-        dirID            : photo.child.currentDirDoc._id,
-        // contentType      : 'image/jpeg', // photo.mimeType, TODO
-        contentType      : photo.mimeType, // TODO
-        // lastModifiedDate : photo.newsDate.format(),
-        lastModifiedDate : new Date().toISOString(),
-        // metadata         : { datetime: photo.newsDate.format() }
-        // metadata         : { datetime: new Date().toISOString() }
-      })
+      if (photo.fileIdToUpdate) {
+        log('debug', 'update photo ' + filename)
+        return cozyClient.files.updateById(
+          photo.fileIdToUpdate,
+          bufferToStream(photo.body),
+          {
+            contentType      : photo.mimeType,
+            lastModifiedDate : photo.newsDate.format(),
+            // metadata         : { datetime: photo.newsDate.format() },  // FAILS
+            // metadata         : { datetime: new Date().toISOString() }, // FAILS
+            metadata         : { datetime: new Date() },               // FAILS
+          }
+        )
+      } else {
+        log('debug', 'create photo ' + filename)
+        return cozyClient.files.create(bufferToStream(photo.body), {
+          name             : filename,
+          dirID            : photo.child.currentDirDoc._id,
+          contentType      : photo.mimeType,
+          lastModifiedDate : photo.newsDate.format(),
+          // metadata         : { datetime: photo.newsDate.format()  }, // TODO à tester
+          metadata         : { datetime: new Date().toISOString() }, // TODO à tester
+        })
+      }
+
     })
     .then(fileDoc => {
-      const historyItem = {
+      const newHistoryItem = {
         cozyId        : fileDoc._id,
         kidizzId      : photo.kidizzId,
-        retrievalDate : new Date().toISOString()
+        retrievalDate : new Date().toISOString(),
       }
-      CTXT.history.photos.push(historyItem)
-      return historyItem
+      // update history
+      if (photo.histItem) {
+        Object.assign(photo.histItem, newHistoryItem) // update the existing histroy item
+      } else {
+        CTXT.history.photos.push(newHistoryItem)      // create a new history item
+      }
+      // return history item only if it must be inserted in the album
+      if (photo.isAlbumToUpdate) {
+        return newHistoryItem
+      } else {
+        return undefined
+      }
     })
     .catch(err => {
-      if (err.message === 'File with same path already in Cozy') {
-        log('info', 'File with same path already in Cozy')
-      } else {
-        log('error', err)
-      }
+        log('error', 'Error during saving photo')
+        log('error', err.message)
     })
 }
 
@@ -498,20 +575,6 @@ function readExif(photo) {
       }
     })
   })
-}
-
-
-/********************************************
- * returns readableInstanceStream Readable
- *********************************************/
-function bufferToStream(buffer) {
-  const readableInstanceStream = new Readable({
-    read() {
-      this.push(buffer)
-      this.push(null)
-    }
-  })
-  return readableInstanceStream
 }
 
 
@@ -562,31 +625,51 @@ async function retrieveAllChildrenFromSchool(){
 
 async function __retrieveMates(child) {
   // A] get all the children of the same section
-  const mates    = CTXT.school.children.filter(mate => mate.section_id == child.section_id)
+  const mates = CTXT.school.children.filter(mate => mate.section_id == child.section_id)
   // B] prepare the avatarList : [ {url, mate, child, matesAvatarDirId, fileIdToUpdate},...]
   let avatarList = []
   const matesAvatarDirId = CTXT.history.directoriesId[`${child.id}-${child.section_name}-matesDir`]
   for (let mate of mates) {
-    if (await isMatePhotoAlreadyInCozy(child, mate)) continue // check the mates image has not already been downloded
-    let photo = {
-      url              : mate.avatar.avatar.url,
-      mate             : mate,
-      child            : child,
-      matesAvatarDirId : matesAvatarDirId,
-      fileIdToUpdate   : mate.existingAvatardId, // optionnal, might be undefined
+    let avatar = mate.avatar.avatar
+    avatar.url =  avatar.url.replace(/\?.*/, '')
+    if (avatar.url[0] === '/') {
+      avatar.url = 'https://api.kidizz.com' + avatar.url
     }
-    avatarList.push(photo)
+    let isInCozy = await isMatePhotoAlreadyInCozy(child, mate)
+    if (isInCozy.docExists &&  isInCozy.isSameVersion) continue // check the mates image has not already been downloded
+    if (isInCozy.docExists && !isInCozy.isSameVersion) {
+      avatar = {
+        url              : avatar.url,
+        mate             : mate,
+        storedMate       : isInCozy.storedMate, // the mate in history, null if it doesn't exist
+        fileIdToUpdate   : isInCozy.storedMate.cozyAvatarId, // optionnal, might be undefined
+        isAlbumToUpdate  : false,
+        child            : child,
+        matesAvatarDirId : matesAvatarDirId,
+      }
+    } else {
+      avatar = {
+        url              : avatar.url,
+        mate             : mate,
+        storedMate       : isInCozy.storedMate, // the mate in history, null if it doesn't exist
+        fileIdToUpdate   : null, // optionnal, might be undefined
+        isAlbumToUpdate  : true,
+        child            : child,
+        matesAvatarDirId : matesAvatarDirId,
+      }
+    }
+    avatarList.push(avatar)
   }
   // B] download all avatars
   return (
     Promise.map(
       avatarList,
-      photo => downloadMatePhoto(photo), { concurrency: 20 }
+      avatar => downloadMateAvatar(avatar), { concurrency: 20 }
     )
   // C] Update avatars album
       .then(async mapresult => {
         let newAvatarIds
-        newAvatarIds = mapresult.filter(item => item) // filters undefined items (photo with a file with same name)
+        newAvatarIds = mapresult.filter(item => item) // filter undefined items
         newAvatarIds = newAvatarIds.map(item => item.cozyAvatarId)
         if (newAvatarIds.length > 0) {
           log('debug', 'about to add mates avatar to mates album id ' + child.currentMatesAlbumDoc._id)
@@ -594,80 +677,84 @@ async function __retrieveMates(child) {
             child.currentMatesAlbumDoc,
             newAvatarIds
           )
-          log('info', `${newAvatarIds.length} avatar files added to ${child.currentMatesAlbumDoc.name}`)
         }
+        log('info', `${newAvatarIds.length} avatar files added to ${child.currentMatesAlbumDoc.name}`)
       })
   )
 }
 
-
+// returns :
+//  {
+//    docExists     : bolean       ,
+//    isSameVersion : bolean       ,
+//    storedMate    : history item ,
+//  }
 async function isMatePhotoAlreadyInCozy(child, mate) {
 
-  // check the mate's avatar is in history
+  // 1] check the mate's avatar is in history
   const storedMate = CTXT.history.mates[`${child.id}-${child.section_name}-${mate.id}`]
   if (!storedMate) {
     log('debug', `Mate's photo doesn't exists in history : ${mate.firstname} ${mate.lastname} - ${mate.id}` )
-    return false
+    return {docExists : false, isSameVersion: false, storedMate: null}
   }
-  // check if the previously downloaded avatar still exists
+  // 2] check if the previously downloaded avatar still exists
   const existingAvatarDoc = await cozyClient.files.statById(storedMate.cozyAvatarId)
-  if (!existingAvatarDoc) {
-    log('debug', `Mate's photo exists in history BUT NOT in Cozy : ${mate.firstname} ${mate.lastname} - ${mate.id}`)
-    return false
+    .catch(() => undefined)
+  if (!existingAvatarDoc || existingAvatarDoc.attributes.trashed) {
+    log('debug', `Mate's avatar exists in history BUT NOT in Cozy : ${mate.firstname} ${mate.lastname} - ${mate.id}`)
+    return {docExists : false, isSameVersion: false, storedMate: storedMate}
   } else {
-    mate.existingAvatardId = existingAvatarDoc._id
+    // mate.existingAvatarId = existingAvatarDoc._id
   }
-  // check the avatar has not been modifed on kidizz
+  // 3] check this is the last version of the avatar that is in history (avatar might have been updated)
   if (storedMate.kidizzAvatarId !== mate.avatar.avatar.url ) {
     log('debug', `Mate\'s photo has been updated on Kidizz : ${mate.firstname} ${mate.lastname} - ${mate.id}`)
     log('debug', storedMate.kidizzAvatarId )
     log('debug', mate.avatar.avatar.url )
-
-    return false
+    return {docExists : true, isSameVersion: false, storedMate: storedMate}
+    // return [false, storedMate]
   }
-  // else the local avatar is uptodate
-  log('debug', 'Mate\'s photo exists in history AND in Cozy AND has not been updated on Kidizz')
-  return true
+  // 4] else the local avatar is uptodate
+  log('debug', 'Mate\'s photo exists in history AND in Cozy AND versions are the same')
+  return {docExists : true, isSameVersion: true, storedMate: storedMate}
+  // return [true, storedMate]
 }
 
 
-
-function downloadMatePhoto(photo) {
-  const child = photo.child
-  const mate  = photo.mate
-  if (photo.url[0] === '/') {
-    photo.url = 'https://api.kidizz.com' + photo.url
-  }
-  photo.ext       = path.extname(URL.parse(photo.url).pathname).slice(1).toLowerCase()
-  photo.mimeType  = mime.getType(photo.ext)
-  log('debug', `download photo mate : ${mate.firstname} ${mate.lastname}.${photo.ext}`)
+function downloadMateAvatar(avatar) {
+  const child = avatar.child
+  const mate  = avatar.mate
+  avatar.ext       = path.extname(URL.parse(avatar.url).pathname).slice(1).toLowerCase()
+  avatar.mimeType  = mime.getType(avatar.ext)
+  log('debug', `download avatar's mate : ${mate.firstname} ${mate.lastname}.${avatar.ext}`)
   return requestFactory({ json: true, cheerio: false, jar: true })
     .get({
-      uri                     : photo.url,
+      uri                     : avatar.url,
       encoding                : null,
       headers                 : { 'cache-control': 'no-cache' },
       resolveWithFullResponse : true,
     })
     .then(resp => {
-
       // Test filename existance
-      const filename = `${mate.firstname} ${mate.lastname}.${photo.ext}`
+      const filename = `${mate.firstname} ${mate.lastname}.${avatar.ext}`
+      // let   fileIdToUpdate  = avatar.fileIdToUpdate
       const isAvatarAlreadyInDir = child.currentMatesDirDoc
         .relations('contents')
         .find(file => filename == file.attributes.name)
       if (isAvatarAlreadyInDir) {
         log('debug', 'avatar with same filename already in mates dir, it will be updated ' + filename)
-        mate.existingAvatardId = isAvatarAlreadyInDir._id
-        photo.fileIdToUpdate   = isAvatarAlreadyInDir._id
+        mate.existingAvatarId  = isAvatarAlreadyInDir._id
+        avatar.fileIdToUpdate  = isAvatarAlreadyInDir._id
+        // avatar.isAlbumToUpdate = true
       }
       // Save avatar
-      if (photo.fileIdToUpdate) {
+      if (avatar.fileIdToUpdate) {
         log('debug', 'update avatar ' + filename)
         return cozyClient.files.updateById(
-          photo.fileIdToUpdate,
+          avatar.fileIdToUpdate,
           bufferToStream(resp.body),
           {
-            contentType      : photo.mimeType,
+            contentType      : avatar.mimeType,
             lastModifiedDate : new Date().toISOString(),
             // metadata         : { datetime: new Date().toISOString() },
           }
@@ -676,8 +763,8 @@ function downloadMatePhoto(photo) {
         log('debug', 'create avatar ' + filename)
         return cozyClient.files.create(bufferToStream(resp.body), {
           name             : filename,
-          dirID            : photo.matesAvatarDirId,
-          contentType      : photo.mimeType,
+          dirID            : avatar.matesAvatarDirId,
+          contentType      : avatar.mimeType,
           lastModifiedDate : new Date().toISOString(),
           // metadata         : { datetime: new Date().toISOString() },
         })
@@ -686,14 +773,14 @@ function downloadMatePhoto(photo) {
     .then(fileDoc => {
       const historyMate = {
         cozyAvatarId   : fileDoc._id,
-        kidizzAvatarId : photo.url,
+        kidizzAvatarId : avatar.url,
         retrievalDate  : new Date().toISOString(),
       }
       CTXT.history.mates[`${child.id}-${child.section_name}-${mate.id}`] = historyMate
-      if (photo.fileIdToUpdate){
-        return undefined //  if the avatar file has been updated, then it is not to be added to the album
+      if (avatar.isAlbumToUpdate){
+        return historyMate
       }
-      return historyMate
+      return undefined
     })
     .catch(err => {
       if (err.message === 'Avatar with same path already in Cozy') {
@@ -703,3 +790,29 @@ function downloadMatePhoto(photo) {
       }
     })
 }
+
+
+
+/****************************************************************************************
+ * HELPERS
+ *****************************************************************************************/
+
+/********************************************
+ * returns readableInstanceStream Readable
+ *********************************************/
+function bufferToStream(buffer) {
+  const readableInstanceStream = new Readable({
+    read() {
+      this.push(buffer)
+      this.push(null)
+    }
+  })
+  return readableInstanceStream
+}
+
+
+/********************************************
+ * test if a file or directory is trashed
+ * returns a boolean
+ *********************************************/
+const notInTrash = (file) => { !file.trashed && !/^\/\.cozy_trash/.test(file.path) }
