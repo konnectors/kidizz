@@ -356,8 +356,8 @@ function retrieveNews_rec(page, child) {
       if (news.length === 0) return true
       //concat all the news pages into CTXT.children[i].news
       child.news = child.news.concat(news)
-      return true    // only to shorten tests
-      // return retrieveNews_rec(page + 1, child)
+      // return true    // only to shorten tests
+      return retrieveNews_rec(page + 1, child)
     })
     .catch(err => log('error', err) )
 }
