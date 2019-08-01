@@ -806,7 +806,5 @@ function bufferToStream(buffer) {
  * returns a boolean
  *********************************************/
 function notInTrash (file) {
-  // console.log( !file.trashed );
-  // console.log(  !/^\/\.cozy_trash/.test(file.path) );
   return !file.trashed && !/^\/\.cozy_trash/.test(file.path)
 }

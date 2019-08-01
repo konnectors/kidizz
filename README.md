@@ -1,18 +1,13 @@
 [Cozy][cozy] Cozy-konnector-kiddiz
 =======================================
 
-TODO
-------------
 
-- limiter les news que l'on Récupère
-- créer un trombi html de la classe de chaque enfant
-- improve ? : log('debug', myString, thirdArgument) : quid du thirdArgument ?
-- faire un album par enfant avec les noms et photo des enfants de sa classe ainsi que des encadrants.
+What is this konnector about ?
+------------------------------
 
-PlAN DE TESTS
---------------
-1. import from scratch : ok
-2. renommer un l'album, supprimer une photo de drive, vider corbeille, vérifier qu'elle n'est plus dans l'album, faire tourner le connecteur :
+This konnector retrieves from https://kidizz.com :
+* the photos of your children
+* the avatar photo of the class mates of your children
 
 
 What's Cozy?
@@ -22,17 +17,8 @@ What's Cozy?
 
 [Cozy] is a personal data platform that brings all your web services in the same private space. With it, your webapps and your devices can share data easily, providing you with a new experience. You can install Cozy on your own hardware where no one's tracking you.
 
-What is this konnector about ?
-------------------------------
-
-This konnector retrieves the photos of your children from https://kidizz.com
-
-### Open a Pull-Request
-
-If you want to work on this konnector and submit code modifications, feel free to open pull-requests!
-</br>See :
-* the [contributing guide][contribute] for more information about how to properly open pull-requests.
-* the [konnectors development guide](https://docs.cozy.io/en/tutorials/konnector/)
+DEVELOPMENT
+------------
 
 ### Run and test
 
@@ -52,9 +38,34 @@ yarn standalone
 ```
 For running the konnector connected to a Cozy server and more details see [konnectors tutorial](https://docs.cozy.io/en/tutorials/konnector/)
 
-### Cozy-konnector-libs
+### Open a Pull-Request
 
-This connector uses [cozy-konnector-libs](https://github.com/cozy/cozy-konnector-libs). It brings a bunch of helpers to interact with the Cozy server and to fetch data from an online service.
+If you want to work on this konnector and submit code modifications, feel free to open pull-requests!
+</br>See :
+* the [contributing guide][contribute] for more information about how to properly open pull-requests.
+* the [konnectors development guide](https://docs.cozy.io/en/tutorials/konnector/)
+
+### Plan de tests - 1.0.0
+* création from scratch : OK
+* re-run : sans modif : OK
+* re-run : suppression d'une photo et un avatar sans vidage corbeille : OK
+* re-run : sans modif : OK
+* re-run : sans modif : OK
+* re-run : suppression d'une photo et un avatar avec vidage corbeille : OK
+* re-run : sans modif : OK
+* re-run : sans modif : OK
+* re-run : modification du nom des albums & suppression d'une photo et un avatar & vidage de la corbeille : OK
+* test re-run : sans modif : OK
+* modification du nom des albums & suppression d'une photo et un avatar & **sans** vidage de la corbeille : OK
+* test re-run : sans modif : OK
+* modification d'un avatar sur site kidiz : OK
+* suppression de l'account data (simule une déconnexion / reconnexion) : ?
+
+
+### TODO for one day...
+- limiter les news que l'on Récupère
+- créer un trombi html de la classe de chaque enfant
+
 
 ### Maintainer
 
@@ -75,7 +86,7 @@ You can reach the Cozy Community by:
 License
 -------
 
-<YOUR KONNECTOR NAME> is developed by <your name> and distributed under the [AGPL v3 license][agpl-3.0].
+https://github.com/konnectors/kidizz is developed by Benibur and distributed under the [AGPL v3 license][agpl-3.0].
 
 [cozy]: https://cozy.io "Cozy Cloud"
 [agpl-3.0]: https://www.gnu.org/licenses/agpl-3.0.html

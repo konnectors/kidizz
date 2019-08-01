@@ -8,7 +8,7 @@
   "source": "git@github.com:konnector/kidizz",
   "editor": "Benibur",
   "vendor_link": "https://kidizz.com/",
-  "categories": ["School"],
+  "categories": ["education"],
   "fields": {
     "login": {
       "type": "text"
