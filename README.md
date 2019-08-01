@@ -17,6 +17,7 @@ What's Cozy?
 
 [Cozy] is a personal data platform that brings all your web services in the same private space. With it, your webapps and your devices can share data easily, providing you with a new experience. You can install Cozy on your own hardware where no one's tracking you.
 
+
 DEVELOPMENT
 ------------
 
@@ -61,16 +62,13 @@ If you want to work on this konnector and submit code modifications, feel free t
 * modification d'un avatar sur site kidiz : OK
 * suppression de l'account data (simule une déconnexion / reconnexion) : ?
 
-
 ### TODO for one day...
 - limiter les news que l'on Récupère
 - créer un trombi html de la classe de chaque enfant
 
-
 ### Maintainer
 
 The lead maintainers for this konnector is Benibur.
-
 
 ### Get in touch
 
