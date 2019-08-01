@@ -4,7 +4,7 @@ const webpack = require('webpack')
 const fs = require('fs')
 const SvgoInstance = require('svgo')
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer')
-        .BundleAnalyzerPlugin
+  .BundleAnalyzerPlugin
 
 const entry = require('./package.json').main
 

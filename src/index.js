@@ -83,9 +83,11 @@ CTXT.history = {
 
 module.exports = new BaseKonnector(start)
 
-// The start function is run by the BaseKonnector instance only when it got all the account
-// information (fields). When you run this connector yourself in "standalone" mode or "dev" mode,
-// the account information come from ./konnector-dev-config.json file
+
+/*******************************************************
+When you run this connector yourself in "standalone" mode or "dev" mode,
+the account information come from ./konnector-dev-config.json file
+********************************************************/
 async function start(fields) {
   CTXT.fields   = fields
   CTXT.NODE_ENV = process.env.NODE_ENV
@@ -143,13 +145,12 @@ async function start(fields) {
   await retrievePhotos()
   log('info', 'Photos successfully retrieved')
 
-  log('info', 'Retrieving the children\'s mates avatars')
+  log('info', `Retrieving the children's mates avatars`)
   await retrieveChildrenMates()
-  log('info', 'Children\'s Mates successfully retrieved')
+  log('info', `Children's Mates successfully retrieved`)
 
   log('info', 'Save Account DATA')
-  // log('debug', 'account data to save is :')
-  // log('debug', JSON.stringify(CTXT.history)) // no output in prod logs...
+
   if (CTXT.NODE_ENV != 'development') {
     await this.saveAccountData(CTXT.history, { merge: false })
     log('info', 'Account DATA saved')
@@ -168,7 +169,6 @@ async function start(fields) {
 
 /*******************************************************
 AUTHENTICATION
-TODO : store the response cookie to be reused on next run
 ********************************************************/
 function authenticateAndInitChildData(login, password) {
   return requestFactory({json: true, cheerio: false, jar: true})
@@ -244,7 +244,6 @@ async function retrieveChildData(child) {
       .statById(currentDirId, false, { limit: 10000 })
       .catch( () => undefined)
   }
-
   if (!dirDoc || !notInTrash(dirDoc)) {
     // there is no existing directory in history
     // try to fetch the directory with the default path or create a new one
@@ -357,7 +356,7 @@ function retrieveNews_rec(page, child) {
       if (news.length === 0) return true
       //concat all the news pages into CTXT.children[i].news
       child.news = child.news.concat(news)
-      return true // TODO : remove, only to shorten tests
+      return true    // only to shorten tests
       // return retrieveNews_rec(page + 1, child)
     })
     .catch(err => log('error', err) )
@@ -387,7 +386,6 @@ async function __retrievePhotos(child) {
       if (isInCozy.docExists) continue
       let url = img.url
       url = path.dirname(url) + '/' + path.basename(url).replace(/^nc1000_/, '')
-      //
       let photo = {
         url             : url                          ,
         fileIdToUpdate  : null                         ,
@@ -400,11 +398,6 @@ async function __retrievePhotos(child) {
       photosList.push(photo)
     }
   }
-  // console.log('currentDirDoc content :', child.currentDirDoc.relations('contents'));
-  // child.currentDirDoc.relations('contents').forEach(file => {
-  //   console.log(file.attributes.name);
-  //   testedFilename === file.attributes.name
-  // })
   // B] download all photos
   return (
     Promise.map(
@@ -430,8 +423,6 @@ async function __retrievePhotos(child) {
 }
 
 
-
-
 /*******************************************************
  Returns :
   {
@@ -440,7 +431,6 @@ async function __retrievePhotos(child) {
   }
 ********************************************************/
 async function isPhotoAlreadyInCozy(kidizzPhotoId) {
-  // TODO full history cycle to be tested
   const existingHistItem = CTXT.history.photos.find(
     img => img.kidizzId === kidizzPhotoId
   )
@@ -449,9 +439,9 @@ async function isPhotoAlreadyInCozy(kidizzPhotoId) {
     return {docExists:false, histItem: null}
   }
   const existingHistItemDoc = await cozyClient.files.statById(existingHistItem.cozyId)
-    .catch(() => undefined) // TODO to be tested in dev mode (when getAccoundData will work)
+    .catch(() => undefined)
   if (!existingHistItemDoc || existingHistItemDoc.attributes.trashed) {
-    log('debug', 'photo exists in history but NOT in Cozy - ' + existingHistItem.cozyId) // TODO : to be tested
+    log('debug', 'photo exists in history but NOT in Cozy - ' + existingHistItem.cozyId)
     return {docExists:false, histItem: existingHistItem}
   }
   log('debug', 'photo exists in history AND in Cozy : ' + existingHistItem.cozyId)
@@ -498,9 +488,6 @@ function downloadPhoto(photo) {
           {
             contentType      : photo.mimeType,
             lastModifiedDate : photo.newsDate.format(),
-            // metadata         : { datetime: photo.newsDate.format() },  // FAILS
-            // metadata         : { datetime: new Date().toISOString() }, // FAILS
-            metadata         : { datetime: new Date() },               // FAILS
           }
         )
       } else {
@@ -510,8 +497,6 @@ function downloadPhoto(photo) {
           dirID            : photo.child.currentDirDoc._id,
           contentType      : photo.mimeType,
           lastModifiedDate : photo.newsDate.format(),
-          // metadata         : { datetime: photo.newsDate.format()  }, // TODO à tester
-          metadata         : { datetime: new Date().toISOString() }, // TODO à tester
         })
       }
 
@@ -590,6 +575,7 @@ async function retrieveChildrenMates() {
   return Promise.all(promises)
 }
 
+
 async function retrieveAllChildrenFromSchool(){
   let areChildrenFound = false
   // loop over all children's news to find one having the school details (users, children and sections)
@@ -623,9 +609,10 @@ async function retrieveAllChildrenFromSchool(){
   }
 }
 
+
 async function __retrieveMates(child) {
   // A] get all the children of the same section
-  const mates = CTXT.school.children.filter(mate => mate.section_id == child.section_id)
+  const mates = CTXT.school.children.filter(mate => { mate.section_id === child.section_id })
   // B] prepare the avatarList : [ {url, mate, child, matesAvatarDirId, fileIdToUpdate},...]
   let avatarList = []
   const matesAvatarDirId = CTXT.history.directoriesId[`${child.id}-${child.section_name}-matesDir`]
@@ -683,14 +670,16 @@ async function __retrieveMates(child) {
   )
 }
 
-// returns :
-//  {
-//    docExists     : bolean       ,
-//    isSameVersion : bolean       ,
-//    storedMate    : history item ,
-//  }
-async function isMatePhotoAlreadyInCozy(child, mate) {
 
+/*******************************************************
+returns :
+  {
+    docExists     : bolean       ,
+    isSameVersion : bolean       ,
+    storedMate    : history item ,
+  }
+********************************************************/
+async function isMatePhotoAlreadyInCozy(child, mate) {
   // 1] check the mate's avatar is in history
   const storedMate = CTXT.history.mates[`${child.id}-${child.section_name}-${mate.id}`]
   if (!storedMate) {
@@ -797,6 +786,7 @@ function downloadMateAvatar(avatar) {
  * HELPERS
  *****************************************************************************************/
 
+
 /********************************************
  * returns readableInstanceStream Readable
  *********************************************/
@@ -815,4 +805,8 @@ function bufferToStream(buffer) {
  * test if a file or directory is trashed
  * returns a boolean
  *********************************************/
-const notInTrash = (file) => { !file.trashed && !/^\/\.cozy_trash/.test(file.path) }
+function notInTrash (file) {
+  // console.log( !file.trashed );
+  // console.log(  !/^\/\.cozy_trash/.test(file.path) );
+  return !file.trashed && !/^\/\.cozy_trash/.test(file.path)
+}
