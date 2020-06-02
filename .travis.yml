@@ -1,9 +1,9 @@
 language: node_js
 node_js:
-- '8'
+- '12'
 env:
   global:
-  - DEPLOY_REPOSITORY="git@github.com:konnectors/cozy-konnector-kidizz.git"
+  # REGISTRY_TOKEN(editor=cozy, app=kidizz)
   - secure: pqKNPR73mCdcMghktbgO4jLZov77lC76hQi2jdMrXqG67+EwyXNV2XgLw+Wssn7N03y3rDMpbhkH8DxY155JtGq6RTdm0Y3FjSicCja5YJl1N3yEH9fYOZAWBvx+HPRdAJ221c0mvkkMMdSaIV03RR//P72Y8aM5BajJYeWQJshE3nR95e/IawmU4ALmjuf1F9Yv8Bgm7/d9l6/w1DKPgYDsngH5LnNzC25NFrz4AvmZ5Ys+WnVqqPuh5MsASlootrl0SJl+ik2AD4mcFGHIJquavI52NjCVCM4ZLGXhdPqvVktPgEfUFQOdC9PpOa06rkgrt2uH7sxvOtg9CYYWaJ5HtIOrkKofVfsBrm81NDFgfVE7tTxfeXiR2Gl/8hQmPSc1tRk89yNh1gAVRyejcaml+tdKyCgOCefxL2uOOLVgdIRS6qdkLPnnIr9yHzAlZxgA65D7aNrVs0JHKGvlxy6VG05oHA8AkljuFBkBtYX2TgWhYCSafl2TahPjjLfzSnyKA4UjqtDlRsS4fqb9xqltQPAddSTNxrs2hxEllnwguEDpmUNhXD4A7G4vgfIijNRB3rbGkvru3dAfBtLe898D7j+A8bwaJqHE6Qx/8iM4Jkm+TTtSrDlerY8JjDOl1a8Bfezypz1oOveIkv1XeJlA5bPQbLgrLyPUaia4Bjw=
 cache:
   yarn: true
@@ -16,7 +16,6 @@ branches:
 script:
 - yarn lint
 - yarn build
-- yarn run check
 deploy:
 - provider: script
   skip-cleanup: true
