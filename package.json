@@ -37,7 +37,7 @@
     "travisDeployKey": "./bin/generate_travis_deploy_key"
   },
   "dependencies": {
-    "cozy-konnector-libs": "4.34.4",
+    "cozy-konnector-libs": "4.34.5",
     "exif": "^0.6.0",
     "mime": "^2.4.6",
     "moment": "^2.26.0"
