@@ -3,7 +3,7 @@
   "name": "Kidizz",
   "type": "konnector",
   "language": "node",
-  "icon": "icon.png",
+  "icon": "icon.svg",
   "slug": "kidizz",
   "source": "git@github.com:konnector/kidizz",
   "editor": "Benibur",
