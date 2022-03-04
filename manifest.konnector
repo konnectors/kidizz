@@ -1,5 +1,5 @@
 {
-  "version": "1.0.3",
+  "version": "1.1.0",
   "name": "Kidizz",
   "type": "konnector",
   "language": "node",
@@ -8,7 +8,9 @@
   "source": "git@github.com:konnector/kidizz",
   "editor": "Benibur",
   "vendor_link": "https://kidizz.com/",
-  "categories": ["education"],
+  "categories": [
+    "education"
+  ],
   "fields": {
     "login": {
       "type": "text"
@@ -29,16 +31,21 @@
     "files": {
       "type": "io.cozy.files"
     },
-    "albums": {"type": "io.cozy.photos.albums"},
+    "albums": {
+      "type": "io.cozy.photos.albums"
+    },
     "accounts": {
-        "type": "io.cozy.accounts"
+      "type": "io.cozy.accounts"
     }
   },
   "developer": {
     "name": "Benibur",
     "url": "https://github.com/Benibur/"
   },
-  "langs": ["fr", "en"],
+  "langs": [
+    "fr",
+    "en"
+  ],
   "locales": {
     "fr": {
       "short_description": "Récupère les photos de vos enfants partagés sur Kidizz.com",
