@@ -39,7 +39,7 @@
     "cozy-konnector-libs": "4.42.2",
     "exif": "^0.6.0",
     "mime": "^2.4.6",
-    "moment": "^2.27.0"
+    "moment": "^2.29.2"
   },
   "devDependencies": {
     "copy-webpack-plugin": "6.3.0",
