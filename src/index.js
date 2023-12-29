@@ -1,10 +1,5 @@
 /* eslint-disable */
 
-/* Sentry configuration */
-process.env.SENTRY_DSN =
-  process.env.SENTRY_DSN ||
-  'https://1d87850b15df4bd0a97b9494d71bde92@sentry.cozycloud.cc/128'
-
 /* SET DEBUG ENVIRONEMNT VARIABLE TO FALSE TO AVOID LOGS FROM THE EXIF LIB */
 process.env['DEBUG'] = true
 
